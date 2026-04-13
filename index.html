@@ -57,6 +57,7 @@
     gap: 4px;
     width: 340px;
     height: 340px;
+    touch-action: manipulation;
   }
 
   .tile {
@@ -215,6 +216,8 @@ let startTime = 0;
 let timeLeft = 0;
 
 const grid = document.getElementById('grid');
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dragstart', e => e.preventDefault());
 const menu = document.getElementById('menu');
 const gameDiv = document.getElementById('game');
 const scoreDisplay = document.getElementById('score-display');
@@ -230,7 +233,7 @@ for (let i = 0; i < GRID_SIZE; i++) {
   const tile = document.createElement('div');
   tile.classList.add('tile', 'white');
   tile.dataset.index = i;
-  tile.addEventListener('click', () => handleTap(i));
+  tile.addEventListener('pointerdown', (e) => { e.preventDefault(); handleTap(i); });
   grid.appendChild(tile);
   tiles.push(tile);
 }
