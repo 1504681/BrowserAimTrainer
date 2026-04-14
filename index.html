@@ -2412,7 +2412,7 @@ const DEFAULT_SETTINGS = {
   skybox: 'range',
   targetColor: '#f2f2f2',
   headColor: '#ff6b6b',
-  fov: 70,  // vertical FOV; matches Overwatch Config FOV 103 (HFOV ~97° at 16:9)
+  fov: 65,  // vertical FOV — gives HFOV 97° at 16:9, matching Overwatch Config FOV 103
   difficulty: 'normal',
   walkSpeed: 7.3,
   trackingCount: 4,
@@ -2438,11 +2438,12 @@ const WEAPONS = {
 function currentWeapon() { return WEAPONS[Settings.weapon] || WEAPONS.hitscan; }
 
 // Training augments — temporarily override sens and FOV for training routines (AIMER7-inspired)
-// Augment FOV values are vertical FOV (Three.js convention)
-// 50 VFOV ≈ Overwatch Config FOV 80 · 90 VFOV ≈ Overwatch Config FOV 130
+// Augment FOV values are vertical FOV (Three.js) — picked so HFOV at 16:9 matches OW's config FOV
+//   VFOV 45  → HFOV ~74 at 16:9  → matches OW Config FOV 80
+//   VFOV 85  → HFOV ~119 at 16:9 → matches OW Config FOV 130 (approx)
 const AUGMENTS = {
-  smoothness: { label: 'Smoothness', sensMul: 1.15, fov: 50, hint: '+15% sens · OW FOV 80  (tracking/precision)' },
-  speed:      { label: 'Speed',      sensMul: 1/3,  fov: 90, hint: '1/3 sens · OW FOV 130  (big flicks)' }
+  smoothness: { label: 'Smoothness', sensMul: 1.15, fov: 45, hint: '+15% sens · OW FOV 80  (tracking/precision)' },
+  speed:      { label: 'Speed',      sensMul: 1/3,  fov: 85, hint: '1/3 sens · OW FOV 130  (big flicks)' }
 };
 
 const Settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
