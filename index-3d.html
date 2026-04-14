@@ -346,7 +346,7 @@
 <!-- ===== Main Menu ===== -->
 <div id="menu" class="screen show">
   <h1>Browser Aim Trainer<span class="badge">3D · FPS</span></h1>
-  <div class="sens">Calibrated for your in-game sens · F fullscreen · ESC pause · R restart</div>
+  <div class="sens">F fullscreen · ESC pause · R restart</div>
   <div class="cal">
     <div class="row">
       <label>in / 360°: <input id="cal-input" type="number" step="0.01" value="15.4083"></label>
@@ -487,6 +487,25 @@
   </div>
 </div>
 
+<!-- First-run sensitivity prompt -->
+<div id="first-run" class="screen">
+  <h1>Welcome</h1>
+  <p style="max-width:480px;text-align:center;margin-bottom:14px;">
+    Enter your sensitivity from whatever game you want to match — measured in <b>inches per 360°</b>.<br>
+    A sensitivity converter (mouse-sensitivity.com etc.) can give you this value, or use the in-game calibration tool after setup.
+  </p>
+  <div class="row" style="margin-bottom:10px;">
+    <label>in / 360°: <input id="first-run-input" type="number" step="0.01" min="0.1" style="width:120px;padding:6px 8px;background:#111;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:4px;font-size:1.1rem;"></label>
+  </div>
+  <p style="font-size:0.78rem;opacity:0.55;max-width:420px;text-align:center;margin-bottom:14px;">
+    Don't know? You can skip and tweak it later, or open Calibrate to swipe a 360° in your game and have it auto-detected.
+  </p>
+  <div class="row">
+    <button class="btn primary" id="first-run-save">Save & Continue</button>
+    <button class="btn muted" id="first-run-skip">Skip</button>
+  </div>
+</div>
+
 <!-- Calibration overlay -->
 <div id="cal-overlay">
   <h2>Calibration</h2>
@@ -558,7 +577,7 @@ function deepMerge(target, src) {
 loadSettings();
 
 // ============================================================================
-// Sensitivity (1000 DPI, OW sens 3.54 → 15.4083 in/360 reference)
+// Sensitivity — user-specified inches per 360° (any game), persisted to localStorage
 // ============================================================================
 const DPI = 1000;
 const DEFAULT_INCHES_PER_360 = 15.4083;
@@ -1155,7 +1174,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 // ============================================================================
-// Movement (Overwatch-feel)
+// Movement (snappy FPS-feel: high accel, quick stop)
 // ============================================================================
 const MOVE_ACCEL = 60;     // m/s² (snappy)
 const MOVE_FRICTION = 14;  // friction when no input
@@ -1451,9 +1470,7 @@ function tickTimer() {
 }
 
 function showOnly(screen) {
-  for (const s of [menuScreen, pauseScreen, settingsScreen, overlayScreen]) {
-    s.classList.remove('show');
-  }
+  for (const s of document.querySelectorAll('.screen')) s.classList.remove('show');
   if (screen) screen.classList.add('show');
 }
 
@@ -1818,6 +1835,35 @@ $('btn-retry').onclick = () => startGame(mode);
 $('btn-menu').onclick  = showMainMenu;
 
 // ============================================================================
+// First-run sensitivity prompt
+// ============================================================================
+const firstRunScreen = $('first-run');
+const firstRunInput = $('first-run-input');
+
+function showFirstRun() {
+  firstRunInput.value = inchesPer360.toFixed(4);
+  showOnly(firstRunScreen);
+  setTimeout(() => firstRunInput.focus(), 50);
+}
+
+$('first-run-save').onclick = () => {
+  const v = parseFloat(firstRunInput.value);
+  if (v > 0 && isFinite(v)) {
+    setInches(v);
+    calInput.value = v;
+  }
+  localStorage.setItem('first_run_done', '1');
+  showMainMenu();
+};
+$('first-run-skip').onclick = () => {
+  localStorage.setItem('first_run_done', '1');
+  showMainMenu();
+};
+firstRunInput.addEventListener('keydown', (e) => {
+  if (e.code === 'Enter') $('first-run-save').click();
+});
+
+// ============================================================================
 // Initial sync
 // ============================================================================
 applySkybox();
@@ -1825,6 +1871,10 @@ renderCrosshair();
 syncSettingsUI();
 camera.fov = Settings.fov;
 camera.updateProjectionMatrix();
+
+if (!localStorage.getItem('first_run_done')) {
+  showFirstRun();
+}
 </script>
 </body>
 </html>
