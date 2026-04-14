@@ -114,7 +114,42 @@
   #menu .sens {
     font-size: 0.85rem;
     opacity: 0.65;
+    margin-bottom: 4px;
+  }
+  #menu .cal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
     margin-bottom: 16px;
+  }
+  #menu .cal label {
+    font-size: 0.9rem;
+    opacity: 0.85;
+  }
+  #menu .cal input {
+    width: 90px;
+    padding: 4px 8px;
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    margin-left: 4px;
+  }
+  #menu .cal button {
+    width: auto;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 4px;
+  }
+  #menu .cal-hint {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    max-width: 320px;
+    text-align: center;
   }
   #menu button {
     width: 280px;
@@ -210,7 +245,12 @@
 
 <div id="menu">
   <h1>Don't Tap the White Tile<span class="badge">FPS</span></h1>
-  <div class="sens">1000 DPI · Overwatch sens 3.54 · 15.4083 in / 360°</div>
+  <div class="sens">1000 DPI · OW sens 3.54 · reference 15.4083 in / 360°</div>
+  <div class="cal">
+    <label>in / 360°: <input id="cal-input" type="number" step="0.1" value="15.4083"></label>
+    <button id="cal-reset" type="button">reset</button>
+    <div class="cal-hint">Browser pointer lock loses raw counts — tweak this to match an in-game 360.</div>
+  </div>
   <button id="btn-classic">Classic<br><span class="mode-desc">Shoot 50 black tiles as fast as you can</span></button>
   <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive 60 seconds — don't shoot the wrong tile</span></button>
   <button id="btn-zen">Zen<br><span class="mode-desc">No timer — just shoot</span></button>
@@ -239,10 +279,19 @@ const GRID_SIZE = 16;
 const CLASSIC_TARGET = 50;
 const ENDURANCE_TIME = 60;
 
-// Sensitivity: 1000 DPI, Overwatch sens 3.54 → 15.4083 in/360
+// Sensitivity: 1000 DPI, Overwatch sens 3.54 → 15.4083 in/360 reference.
+// Browser pointer lock reports movementX in CSS pixels, so we multiply by
+// devicePixelRatio to recover (approx) raw mouse counts under display scaling.
+// User can also tweak in/360° live via the menu input.
 const DPI = 1000;
-const INCHES_PER_360 = 15.4083;
-const RAD_PER_COUNT = (2 * Math.PI) / (INCHES_PER_360 * DPI);
+const DEFAULT_INCHES_PER_360 = 15.4083;
+let inchesPer360 = parseFloat(localStorage.getItem('cal_in360') || '') || DEFAULT_INCHES_PER_360;
+let radPerCount = (2 * Math.PI) / (inchesPer360 * DPI);
+function setInches(v) {
+  inchesPer360 = v;
+  radPerCount = (2 * Math.PI) / (inchesPer360 * DPI);
+  localStorage.setItem('cal_in360', String(v));
+}
 
 // ===== Game state =====
 let blackTiles = new Set();
@@ -389,8 +438,10 @@ document.addEventListener('pointerlockchange', () => {
 
 document.addEventListener('mousemove', (e) => {
   if (!pointerLocked) return;
-  yaw   -= e.movementX * RAD_PER_COUNT;
-  pitch -= e.movementY * RAD_PER_COUNT;
+  // movementX is CSS pixels; multiply by devicePixelRatio to approximate raw mouse counts
+  const dpr = window.devicePixelRatio || 1;
+  yaw   -= e.movementX * dpr * radPerCount;
+  pitch -= e.movementY * dpr * radPerCount;
   if (pitch >  PITCH_LIMIT) pitch =  PITCH_LIMIT;
   if (pitch < -PITCH_LIMIT) pitch = -PITCH_LIMIT;
 });
@@ -464,6 +515,18 @@ document.getElementById('btn-endurance').onclick = () => startGame('endurance');
 document.getElementById('btn-zen').onclick       = () => startGame('zen');
 document.getElementById('btn-retry').onclick     = () => startGame(mode);
 document.getElementById('btn-menu').onclick      = showMenu;
+
+// Calibration input
+const calInput = document.getElementById('cal-input');
+calInput.value = inchesPer360;
+calInput.addEventListener('input', () => {
+  const v = parseFloat(calInput.value);
+  if (v > 0 && isFinite(v)) setInches(v);
+});
+document.getElementById('cal-reset').onclick = () => {
+  setInches(DEFAULT_INCHES_PER_360);
+  calInput.value = DEFAULT_INCHES_PER_360;
+};
 
 function showMenu() {
   overlay.classList.remove('show');
