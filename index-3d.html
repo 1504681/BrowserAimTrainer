@@ -3006,7 +3006,7 @@ function pauseGame() {
   $('pause-time').textContent = mode === 'classic' ? elapsedSeconds().toFixed(2) : (timerDuration > 0 ? timeLeft.toFixed(1) + 's' : elapsedSeconds().toFixed(1));
   const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
   $('pause-acc').textContent = acc + '%';
-  if ((mode === 'cylinder' || mode === 'pole') && pursuerReactiveSamples.length > 0) {
+  if (mode === 'cylinder' && pursuerReactiveSamples.length > 0) {
     const n = pursuerReactiveSamples.length;
     const avgN = Math.round(pursuerReactiveSamples.reduce((a,b)=>a+b,0) / n);
     const avgF = Math.round(pursuerCorrectSamples.reduce((a,b)=>a+b,0) / n);
@@ -3118,7 +3118,7 @@ function gameOver(won) {
   $('go-streak').textContent = bestStreak;
 
   const reactiveCount = pursuerReactiveSamples.length;
-  if ((mode === 'cylinder' || mode === 'pole') && reactiveCount > 0) {
+  if (mode === 'cylinder' && reactiveCount > 0) {
     const avgN = Math.round(pursuerReactiveSamples.reduce((a,b)=>a+b,0) / reactiveCount);
     const avgF = Math.round(pursuerCorrectSamples.reduce((a,b)=>a+b,0) / reactiveCount);
     $('go-notice').textContent = avgN + 'ms';
