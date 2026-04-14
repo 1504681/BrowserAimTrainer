@@ -1728,12 +1728,12 @@
             <option value="t">T (no bottom)</option>
           </select>
         </div>
-        <div class="field"><label>Size</label><input type="range" id="set-xhair-size" min="2" max="30" step="1"><span class="value" id="set-xhair-size-v"></span></div>
-        <div class="field"><label>Thickness</label><input type="range" id="set-xhair-thick" min="1" max="6" step="1"><span class="value" id="set-xhair-thick-v"></span></div>
-        <div class="field"><label>Gap</label><input type="range" id="set-xhair-gap" min="0" max="20" step="1"><span class="value" id="set-xhair-gap-v"></span></div>
-        <div class="field"><label>Color</label><input type="color" id="set-xhair-color"></div>
+        <div class="field" data-xhair-styles="cross,circle,t"><label>Size</label><input type="range" id="set-xhair-size" min="2" max="30" step="1"><span class="value" id="set-xhair-size-v"></span></div>
+        <div class="field" data-xhair-styles="cross,circle,t"><label>Thickness</label><input type="range" id="set-xhair-thick" min="1" max="6" step="1"><span class="value" id="set-xhair-thick-v"></span></div>
+        <div class="field" data-xhair-styles="cross,circle,t"><label>Gap</label><input type="range" id="set-xhair-gap" min="0" max="20" step="1"><span class="value" id="set-xhair-gap-v"></span></div>
+        <div class="field" data-xhair-styles="cross,circle,t"><label>Color</label><input type="color" id="set-xhair-color"></div>
         <div class="field"><label>Outline</label><input type="checkbox" id="set-xhair-outline"></div>
-        <div class="field"><label>Center dot</label><input type="checkbox" id="set-xhair-dot"></div>
+        <div class="field" data-xhair-styles="cross,circle,t"><label>Center dot</label><input type="checkbox" id="set-xhair-dot"></div>
         <div class="field"><label>Dot size</label><input type="range" id="set-xhair-dotsize" min="1" max="8" step="1"><span class="value" id="set-xhair-dotsize-v"></span></div>
         <div class="field"><label>Dot color</label><input type="color" id="set-xhair-dotcolor"></div>
       </div>
@@ -4673,11 +4673,27 @@ syncFns.push(bindNumber('set-tracking-count', () => Settings.trackingCount, v =>
 
 function syncSettingsUI() { for (const fn of syncFns) fn(); }
 
+function syncCrosshairFields() {
+  const style = Settings.crosshair.style;
+  // Hide cross/circle/T-only fields when "dot only" is selected
+  for (const f of document.querySelectorAll('.field[data-xhair-styles]')) {
+    const allowed = f.dataset.xhairStyles.split(',');
+    f.style.display = allowed.includes(style) ? '' : 'none';
+  }
+  // Dot-only style needs the dot to actually render — force it on
+  if (style === 'dot') {
+    Settings.crosshair.dot = true;
+    const cb = $('set-xhair-dot');
+    if (cb) cb.checked = true;
+  }
+}
+
 function onSettingsChanged() {
   applySkybox();
   camera.fov = Settings.fov;
   camera.updateProjectionMatrix();
   document.documentElement.style.setProperty('--hud-inset', Settings.hudInset + 'px');
+  syncCrosshairFields();
   renderCrosshair();
   refreshEnemyColors();
   // Reflect difficulty in main menu toggle too
@@ -5062,6 +5078,7 @@ $('first-run-skip').onclick = () => {
 applySkybox();
 renderCrosshair();
 syncSettingsUI();
+syncCrosshairFields();
 camera.fov = Settings.fov;
 camera.updateProjectionMatrix();
 document.documentElement.style.setProperty('--hud-inset', Settings.hudInset + 'px');
