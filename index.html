@@ -1049,7 +1049,51 @@
     font-weight: 600;
   }
 
-  /* Welcome form */
+  /* Welcome form — two-step */
+  .fr-steps {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 6px 0 22px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    font-weight: 800;
+  }
+  .fr-step {
+    color: var(--text-dim);
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+  }
+  .fr-step.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(6,182,212,0.12);
+  }
+  .fr-step-sep { color: var(--text-dim); font-size: 0.9rem; }
+  .fr-step-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 520px;
+  }
+  .fr-intro {
+    text-align: center;
+    margin-bottom: 18px;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    max-width: 480px;
+  }
+  .fr-hint {
+    font-size: 0.7rem;
+    opacity: 0.5;
+    max-width: 480px;
+    text-align: center;
+    margin: 14px 0 0;
+  }
   .fr-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1826,44 +1870,61 @@
   </div>
 </div>
 
-<!-- First-run sensitivity prompt -->
+<!-- First-run setup — two steps: name, then sens -->
 <div id="first-run" class="screen">
   <h1>Welcome</h1>
   <div class="hwaccel-warn">
     <b>⚠ Hardware Acceleration Required</b><br>
     This game runs on WebGL. If your browser has hardware/graphics acceleration turned off, the game will be a stuttery slideshow and basically unplayable. Make sure it is enabled in your browser settings before continuing.
   </div>
-  <p style="max-width:520px;text-align:center;margin-bottom:18px;">
-    Pick the game whose sensitivity you want to match, enter your in-game value, and we'll convert it.
-  </p>
-  <div class="fr-grid">
-    <label class="fr-field" style="grid-column: 1 / -1;">
-      <span class="fr-lbl">Player Name</span>
-      <input id="fr-name" type="text" maxlength="20" placeholder="Anon" autocomplete="off">
-    </label>
-    <label class="fr-field">
-      <span class="fr-lbl">Mouse DPI</span>
-      <input id="fr-dpi" type="number" min="100" step="50" value="1000">
-    </label>
-    <label class="fr-field">
-      <span class="fr-lbl">Game</span>
-      <select id="fr-game"></select>
-    </label>
-    <label class="fr-field">
-      <span class="fr-lbl">In-game sens</span>
-      <input id="fr-sens" type="number" step="0.01" value="3.54">
-    </label>
-    <div class="fr-result">
-      <span class="fr-lbl">Computed</span>
-      <span class="fr-val" id="fr-converted">— in / 360°</span>
+
+  <div class="fr-steps">
+    <span class="fr-step active" data-step="1">1 · Name</span>
+    <span class="fr-step-sep">→</span>
+    <span class="fr-step" data-step="2">2 · Sensitivity</span>
+  </div>
+
+  <!-- Step 1 — pick a name -->
+  <div class="fr-step-body" data-body="1">
+    <p class="fr-intro">What should we call you on the leaderboards?</p>
+    <div class="fr-grid" style="grid-template-columns: 1fr;">
+      <label class="fr-field">
+        <span class="fr-lbl">Player Name</span>
+        <input id="fr-name" type="text" maxlength="20" placeholder="Anon" autocomplete="off">
+      </label>
+    </div>
+    <div class="row" style="margin-top: 18px;">
+      <button class="btn primary" id="fr-next">Next →</button>
     </div>
   </div>
-  <p style="font-size:0.7rem;opacity:0.5;max-width:480px;text-align:center;margin:14px 0;">
-    Disable Windows "Enhanced pointer precision" and use the Calibrate tool after setup for the most accurate match.
-  </p>
-  <div class="row">
-    <button class="btn primary" id="first-run-save">Save & Continue</button>
-    <button class="btn muted" id="first-run-skip">Skip</button>
+
+  <!-- Step 2 — sens matching -->
+  <div class="fr-step-body" data-body="2" style="display:none;">
+    <p class="fr-intro">Pick the game whose sensitivity you want to match, enter your in-game value, and we'll convert it.</p>
+    <div class="fr-grid">
+      <label class="fr-field">
+        <span class="fr-lbl">Mouse DPI</span>
+        <input id="fr-dpi" type="number" min="100" step="50" value="1000">
+      </label>
+      <label class="fr-field">
+        <span class="fr-lbl">Game</span>
+        <select id="fr-game"></select>
+      </label>
+      <label class="fr-field">
+        <span class="fr-lbl">In-game sens</span>
+        <input id="fr-sens" type="number" step="0.01" value="3.54">
+      </label>
+      <div class="fr-result">
+        <span class="fr-lbl">Computed</span>
+        <span class="fr-val" id="fr-converted">— in / 360°</span>
+      </div>
+    </div>
+    <p class="fr-hint">Disable Windows "Enhanced pointer precision" and use the Calibrate tool after setup for the most accurate match.</p>
+    <div class="row" style="margin-top: 14px;">
+      <button class="btn muted" id="fr-back">← Back</button>
+      <button class="btn primary" id="first-run-save">Save & Continue</button>
+      <button class="btn muted" id="first-run-skip">Skip</button>
+    </div>
   </div>
 </div>
 
@@ -5212,14 +5273,34 @@ frSens.addEventListener('input', recomputeFirstRun);
 
 const frName = $('fr-name');
 
+function setFirstRunStep(step) {
+  for (const el of document.querySelectorAll('.fr-step')) {
+    el.classList.toggle('active', el.dataset.step === String(step));
+  }
+  for (const el of document.querySelectorAll('.fr-step-body')) {
+    el.style.display = el.dataset.body === String(step) ? '' : 'none';
+  }
+}
+
 function showFirstRun() {
   // Default to a sensible starting point
   if (!frDpi.value) frDpi.value = 1000;
   if (!frSens.value) frSens.value = getSelectedPreset().defaultSens;
   if (Settings.playerName) frName.value = Settings.playerName;
   recomputeFirstRun();
+  setFirstRunStep(1);
   showOnly(firstRunScreen);
+  setTimeout(() => frName.focus(), 50);
 }
+
+$('fr-next').onclick = () => {
+  // Save name (default Anon if empty) then advance to step 2
+  const name = (frName.value || '').trim().slice(0, 20) || 'Anon';
+  Settings.playerName = name;
+  saveSettings();
+  setFirstRunStep(2);
+};
+$('fr-back').onclick = () => setFirstRunStep(1);
 
 $('first-run-save').onclick = () => {
   const v = recomputeFirstRun();
