@@ -3,116 +3,173 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Don't Tap the White Tile — 3D</title>
+<title>Don't Tap the White Tile — FPS</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
+  html, body {
+    width: 100%;
+    height: 100%;
     background: #000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
     color: #fff;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
-    overflow: hidden;
-  }
-
-  #game-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    max-width: 520px;
-    padding: 10px;
-  }
-
-  h1 {
-    font-size: 1.6rem;
-    margin-bottom: 8px;
-    text-align: center;
-    letter-spacing: 1px;
-  }
-
-  #stats {
-    display: flex;
-    justify-content: space-between;
-    width: 92vmin;
-    max-width: 500px;
-    margin-bottom: 10px;
-    font-size: 1.1rem;
-  }
-
-  #stats span {
-    background: rgba(255,255,255,0.1);
-    padding: 6px 14px;
-    border-radius: 8px;
   }
 
   #scene-wrap {
-    width: 92vmin;
-    max-width: 500px;
-    height: 92vmin;
-    max-height: 500px;
-    position: relative;
+    position: fixed;
+    inset: 0;
   }
 
   #scene-wrap canvas {
     display: block;
     width: 100% !important;
     height: 100% !important;
-    touch-action: none;
   }
+
+  /* Crosshair */
+  #crosshair {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 5;
+    display: none;
+  }
+  #crosshair.show { display: block; }
+  #crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.7);
+  }
+  #crosshair::before {
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    transform: translateX(-50%);
+  }
+  #crosshair::after {
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transform: translateY(-50%);
+  }
+  #crosshair-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 3px;
+    height: 3px;
+    background: #ff3030;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    top: 14px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    z-index: 4;
+    pointer-events: none;
+    font-size: 1.15rem;
+  }
+  #hud span {
+    background: rgba(0,0,0,0.55);
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  #hud.hide { display: none; }
 
   /* Menu */
   #menu {
+    position: fixed;
+    inset: 0;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    z-index: 20;
+    background: rgba(0,0,0,0.92);
   }
-
+  #menu h1 {
+    font-size: 2rem;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  #menu .sens {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin-bottom: 16px;
+  }
   #menu button {
-    width: 240px;
+    width: 280px;
     padding: 14px;
     font-size: 1.1rem;
     border: none;
     border-radius: 10px;
     cursor: pointer;
     font-weight: 600;
-    transition: transform 0.1s, box-shadow 0.1s;
   }
-
   #menu button:active { transform: scale(0.97); }
-
   #btn-classic   { background: #0f3460; color: #fff; }
   #btn-endurance { background: #533483; color: #fff; }
   #btn-zen       { background: #e94560; color: #fff; }
-
   .mode-desc {
     font-size: 0.78rem;
     opacity: 0.7;
     font-weight: 400;
   }
 
-  #overlay {
-    display: none;
+  /* Click-to-lock prompt */
+  #lock-prompt {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.85);
+    inset: 0;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0,0,0,0.75);
+    z-index: 15;
+    font-size: 1.4rem;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+  }
+  #lock-prompt.show { display: flex; }
+  #lock-prompt small {
+    font-size: 0.85rem;
+    opacity: 0.7;
+  }
+
+  /* Game over overlay */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     gap: 14px;
-    z-index: 10;
+    background: rgba(0,0,0,0.88);
+    z-index: 25;
   }
-
   #overlay.show { display: flex; }
   #overlay h2 { font-size: 2rem; }
-  #overlay p  { font-size: 1.2rem; opacity: 0.9; }
-
+  #overlay p { font-size: 1.2rem; opacity: 0.9; }
   #overlay button {
     padding: 12px 36px;
     font-size: 1rem;
@@ -122,14 +179,9 @@
     font-weight: 600;
     margin-top: 6px;
   }
-
   #btn-retry { background: #0f3460; color: #fff; }
   #btn-menu  { background: #533483; color: #fff; }
-
-  #best-score {
-    font-size: 0.95rem;
-    opacity: 0.7;
-  }
+  #best-score { font-size: 0.95rem; opacity: 0.7; }
 
   .badge {
     font-size: 0.75rem;
@@ -146,22 +198,27 @@
 </script>
 </head>
 <body>
-<div id="game-container">
-  <h1>Don't Tap the White Tile<span class="badge">3D</span></h1>
 
-  <div id="menu">
-    <button id="btn-classic">Classic<br><span class="mode-desc">Tap 50 black tiles as fast as you can</span></button>
-    <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive as long as you can — 60 seconds</span></button>
-    <button id="btn-zen">Zen<br><span class="mode-desc">No timer, no pressure — just tap</span></button>
-  </div>
+<div id="scene-wrap"></div>
 
-  <div id="game" style="display:none;">
-    <div id="stats">
-      <span id="score-display">Score: 0</span>
-      <span id="timer-display" style="display:none;">Time: 0.00</span>
-    </div>
-    <div id="scene-wrap"></div>
-  </div>
+<div id="crosshair"><div id="crosshair-dot"></div></div>
+
+<div id="hud" class="hide">
+  <span id="score-display">Score: 0</span>
+  <span id="timer-display" style="display:none;">Time: 0.00</span>
+</div>
+
+<div id="menu">
+  <h1>Don't Tap the White Tile<span class="badge">FPS</span></h1>
+  <div class="sens">1000 DPI · Overwatch sens 3.54 (~15.4 in / 360°)</div>
+  <button id="btn-classic">Classic<br><span class="mode-desc">Shoot 50 black tiles as fast as you can</span></button>
+  <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive 60 seconds — don't shoot the wrong tile</span></button>
+  <button id="btn-zen">Zen<br><span class="mode-desc">No timer — just shoot</span></button>
+</div>
+
+<div id="lock-prompt">
+  <div>Click to aim</div>
+  <small>ESC to release · Left click to shoot</small>
 </div>
 
 <div id="overlay">
@@ -182,9 +239,11 @@ const GRID_SIZE = 16;
 const CLASSIC_TARGET = 50;
 const ENDURANCE_TIME = 60;
 
+// Overwatch sensitivity formula: degrees_per_count = sens * 0.0066
+const OW_SENS = 3.54;
+const RAD_PER_COUNT = OW_SENS * 0.0066 * Math.PI / 180;
+
 // ===== Game state =====
-let tileMeshes = [];
-let tileEdges = [];
 let blackTiles = new Set();
 let score = 0;
 let mode = '';
@@ -193,15 +252,16 @@ let timerInterval = null;
 let startTime = 0;
 let timeLeft = 0;
 
-// Tap animation state per tile (pressY, flashTimer, flashColor)
-const tileAnim = Array.from({ length: GRID_SIZE }, () => ({
-  press: 0, flashUntil: 0, flashColor: null
-}));
+let yaw = 0;
+let pitch = 0;
+const PITCH_LIMIT = Math.PI / 2 - 0.01;
 
-// ===== DOM refs =====
+// ===== DOM =====
 const sceneWrap = document.getElementById('scene-wrap');
 const menu = document.getElementById('menu');
-const gameDiv = document.getElementById('game');
+const hud = document.getElementById('hud');
+const crosshair = document.getElementById('crosshair');
+const lockPrompt = document.getElementById('lock-prompt');
 const scoreDisplay = document.getElementById('score-display');
 const timerDisplay = document.getElementById('timer-display');
 const overlay = document.getElementById('overlay');
@@ -211,15 +271,14 @@ const overTime = document.getElementById('over-time');
 const bestScoreEl = document.getElementById('best-score');
 
 document.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('dragstart', e => e.preventDefault());
 
 // ===== Three.js setup =====
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(0x05060a);
+scene.fog = new THREE.Fog(0x05060a, 12, 40);
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-camera.position.set(0, 5.2, 5.2);
-camera.lookAt(0, 0, 0);
+const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.05, 100);
+camera.position.set(0, 1.6, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -228,57 +287,66 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 sceneWrap.appendChild(renderer.domElement);
 
 // Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-dirLight.position.set(-3, 8, 4);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1024, 1024);
-dirLight.shadow.camera.near = 0.5;
-dirLight.shadow.camera.far = 30;
-dirLight.shadow.camera.left = -6;
-dirLight.shadow.camera.right = 6;
-dirLight.shadow.camera.top = 6;
-dirLight.shadow.camera.bottom = -6;
-scene.add(dirLight);
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+const spot = new THREE.SpotLight(0xffffff, 35, 25, Math.PI / 5, 0.4, 1.2);
+spot.position.set(0, 6, 2);
+spot.target.position.set(0, 1.6, -8);
+spot.castShadow = true;
+spot.shadow.mapSize.set(1024, 1024);
+scene.add(spot);
+scene.add(spot.target);
 
-// Floor (catches shadows, gives depth context)
-const floorMat = new THREE.ShadowMaterial({ opacity: 0.45 });
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), floorMat);
+// Floor
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x111418, metalness: 0.1, roughness: 0.9 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), floorMat);
 floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.15;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// ===== Tile geometry =====
-const TILE_SIZE = 1.0;
-const TILE_HEIGHT = 0.22;
-const GAP = 0.08;
+// Back wall
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x0a0c10, metalness: 0.05, roughness: 0.95 });
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 14), wallMat);
+backWall.position.set(0, 7, -10);
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+// ===== Tile grid (4x4 panel on the back wall) =====
+const TILE_SIZE = 1.2;
+const GAP = 0.18;
 const STEP = TILE_SIZE + GAP;
 const GRID_OFFSET = -((4 - 1) * STEP) / 2;
+const PANEL_Z = -8;
+const PANEL_Y = 1.6;
+
+const tileMeshes = [];
+const tileEdges = [];
+const tileAnim = Array.from({ length: GRID_SIZE }, () => ({
+  press: 0, flashUntil: 0, flashColor: null
+}));
+
+const tileGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, 0.18);
+const edgeGeo = new THREE.EdgesGeometry(tileGeo);
 
 const COLOR_INACTIVE = new THREE.Color(0x0a0a0a);
 const COLOR_ACTIVE   = new THREE.Color(0x1a1a1a);
 const COLOR_GREEN    = new THREE.Color(0x2ecc71);
 const COLOR_RED      = new THREE.Color(0xe74c3c);
 const EDGE_DIM       = new THREE.Color(0x222222);
-const EDGE_BRIGHT    = new THREE.Color(0xbbbbbb);
-
-const tileGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
-const edgeGeo = new THREE.EdgesGeometry(tileGeo);
+const EDGE_BRIGHT    = new THREE.Color(0xcccccc);
 
 for (let i = 0; i < GRID_SIZE; i++) {
   const row = Math.floor(i / 4);
   const col = i % 4;
   const x = GRID_OFFSET + col * STEP;
-  const z = GRID_OFFSET + row * STEP;
+  const y = PANEL_Y - GRID_OFFSET - row * STEP;
 
   const mat = new THREE.MeshStandardMaterial({
     color: COLOR_INACTIVE,
-    metalness: 0.1,
-    roughness: 0.7
+    metalness: 0.15,
+    roughness: 0.6
   });
   const mesh = new THREE.Mesh(tileGeo, mat);
-  mesh.position.set(x, 0, z);
+  mesh.position.set(x, y, PANEL_Z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   mesh.userData.index = i;
@@ -291,32 +359,64 @@ for (let i = 0; i < GRID_SIZE; i++) {
   tileEdges.push(edgeMat);
 }
 
-// ===== Resize handling =====
+// ===== Resize =====
 function resize() {
-  const rect = sceneWrap.getBoundingClientRect();
-  renderer.setSize(rect.width, rect.height, false);
-  camera.aspect = rect.width / rect.height;
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 }
-new ResizeObserver(resize).observe(sceneWrap);
 window.addEventListener('resize', resize);
+resize();
 
-// ===== Hit detection =====
-const raycaster = new THREE.Raycaster();
-const ndc = new THREE.Vector2();
+// ===== Pointer Lock + mouse look =====
+const canvas = renderer.domElement;
+let pointerLocked = false;
 
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+function requestLock() {
+  canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+  if (canvas.requestPointerLock) canvas.requestPointerLock();
+}
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+  if (pointerLocked) {
+    lockPrompt.classList.remove('show');
+  } else if (gameActive) {
+    lockPrompt.classList.add('show');
+  }
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!pointerLocked) return;
+  yaw   -= e.movementX * RAD_PER_COUNT;
+  pitch -= e.movementY * RAD_PER_COUNT;
+  if (pitch >  PITCH_LIMIT) pitch =  PITCH_LIMIT;
+  if (pitch < -PITCH_LIMIT) pitch = -PITCH_LIMIT;
+});
+
+// Click handling: lock if not locked, else shoot
+function onClick(e) {
   if (!gameActive) return;
-  const rect = renderer.domElement.getBoundingClientRect();
-  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(ndc, camera);
+  if (!pointerLocked) {
+    requestLock();
+    return;
+  }
+  shoot();
+}
+canvas.addEventListener('mousedown', onClick);
+lockPrompt.addEventListener('mousedown', onClick);
+
+// ===== Shooting (raycast through camera forward) =====
+const raycaster = new THREE.Raycaster();
+const forward = new THREE.Vector3();
+function shoot() {
+  camera.getWorldDirection(forward);
+  raycaster.set(camera.position, forward);
   const hits = raycaster.intersectObjects(tileMeshes, false);
   if (hits.length > 0) {
     handleTap(hits[0].object.userData.index);
   }
-});
+}
 
 // ===== Render loop =====
 let lastTime = performance.now();
@@ -324,22 +424,24 @@ function animate(now) {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
 
+  // Apply camera rotation (yaw then pitch)
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // Tile animations
   for (let i = 0; i < GRID_SIZE; i++) {
     const mesh = tileMeshes[i];
     const anim = tileAnim[i];
     const isBlack = blackTiles.has(i);
 
-    // Target Y: active tiles raised, inactive flat. Press animation overrides briefly.
-    const baseY = isBlack ? 0.1 : 0;
-    let targetY = baseY - anim.press;
-    mesh.position.y += (targetY - mesh.position.y) * Math.min(1, dt * 18);
+    // Active tiles pop out toward camera; press pushes them back
+    const baseZ = isBlack ? 0.12 : 0;
+    const targetZ = PANEL_Z + baseZ - anim.press;
+    mesh.position.z += (targetZ - mesh.position.z) * Math.min(1, dt * 18);
 
-    // Decay press
-    if (anim.press > 0) {
-      anim.press = Math.max(0, anim.press - dt * 3);
-    }
+    if (anim.press > 0) anim.press = Math.max(0, anim.press - dt * 3);
 
-    // Color & edge update (with flash)
     const flashing = now < anim.flashUntil;
     if (flashing) {
       mesh.material.color.copy(anim.flashColor);
@@ -355,7 +457,7 @@ function animate(now) {
 }
 requestAnimationFrame(animate);
 
-// ===== Game logic (mirrors index.html) =====
+// ===== Game logic =====
 document.getElementById('btn-classic').onclick   = () => startGame('classic');
 document.getElementById('btn-endurance').onclick = () => startGame('endurance');
 document.getElementById('btn-zen').onclick       = () => startGame('zen');
@@ -364,25 +466,28 @@ document.getElementById('btn-menu').onclick      = showMenu;
 
 function showMenu() {
   overlay.classList.remove('show');
-  gameDiv.style.display = 'none';
   menu.style.display = 'flex';
+  hud.classList.add('hide');
+  crosshair.classList.remove('show');
+  lockPrompt.classList.remove('show');
   stopTimer();
   gameActive = false;
   blackTiles.clear();
+  if (document.exitPointerLock) document.exitPointerLock();
 }
 
 function startGame(m) {
   mode = m;
   score = 0;
   gameActive = true;
+  yaw = 0;
+  pitch = 0;
   overlay.classList.remove('show');
   menu.style.display = 'none';
-  gameDiv.style.display = 'flex';
-  gameDiv.style.flexDirection = 'column';
-  gameDiv.style.alignItems = 'center';
+  hud.classList.remove('hide');
+  crosshair.classList.add('show');
   scoreDisplay.textContent = 'Score: 0';
   stopTimer();
-  resize();
 
   if (mode === 'classic') {
     timerDisplay.style.display = 'inline';
@@ -404,6 +509,9 @@ function startGame(m) {
     tileAnim[i].flashUntil = 0;
   }
   placeBlackTiles(NUM_BLACK);
+
+  // Auto-request pointer lock on game start
+  requestLock();
 }
 
 function placeBlackTiles(count, exclude = -1) {
@@ -471,6 +579,9 @@ function stopTimer() {
 function gameOver(won) {
   gameActive = false;
   stopTimer();
+  if (document.exitPointerLock) document.exitPointerLock();
+  crosshair.classList.remove('show');
+  hud.classList.add('hide');
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -478,27 +589,27 @@ function gameOver(won) {
     overTitle.textContent = 'Complete!';
     overScore.textContent = CLASSIC_TARGET + ' tiles in ' + elapsed + 's';
     overTime.textContent = '';
-    updateBest('classic-3d', parseFloat(elapsed), true);
+    updateBest('classic-fps', parseFloat(elapsed), true);
   } else if (mode === 'endurance' && won) {
     overTitle.textContent = 'You Survived!';
     overScore.textContent = 'Score: ' + score;
     overTime.textContent = 'You lasted the full 60 seconds!';
-    updateBest('endurance-3d', score, false);
+    updateBest('endurance-fps', score, false);
   } else if (mode === 'endurance') {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
     overTime.textContent = 'Survived: ' + elapsed + 's';
-    updateBest('endurance-3d', score, false);
+    updateBest('endurance-fps', score, false);
   } else if (mode === 'zen') {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
     overTime.textContent = '';
-    updateBest('zen-3d', score, false);
+    updateBest('zen-fps', score, false);
   } else {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
     overTime.textContent = 'Time: ' + elapsed + 's';
-    updateBest('classic-3d-fail', score, false);
+    updateBest('classic-fps-fail', score, false);
   }
 
   overlay.classList.add('show');
