@@ -1984,7 +1984,7 @@
   <div class="aug-toggle">
     <button class="aug-btn" data-aug="">Off</button>
     <button class="aug-btn" data-aug="smoothness">Smoothness<span class="aug-sub">+15% sens · FOV 80</span></button>
-    <button class="aug-btn" data-aug="speed">Speed<span class="aug-sub">÷3 sens · FOV 130</span></button>
+    <button class="aug-btn" data-aug="speed">Speed<span class="aug-sub">1/3 sens · FOV 130</span></button>
   </div>
 
   <div class="row" style="margin-top:18px;">
@@ -2252,6 +2252,7 @@
 
     <div class="row" style="margin-top: 16px;">
       <button class="btn primary" id="tut-dismiss">Got it — play</button>
+      <button class="btn muted" id="tut-never">Never show again</button>
     </div>
     <div class="tut-hint">You can also hit <kbd>ESC</kbd> to unpause and try it</div>
   </div>
@@ -2420,6 +2421,7 @@ const DEFAULT_SETTINGS = {
   playerName: '',
   submitScores: true,
   augment: null,  // 'smoothness' | 'speed' | null
+  strafeTutorialSeen: false,
   // Per-scenario custom multipliers (size, speed, dirChange, hp) + enabled flag
   customScenarios: {
     bouncing: { size: 1, speed: 1, dir: 1, hp: 1, distance: 1, enabled: false },
@@ -2438,7 +2440,7 @@ function currentWeapon() { return WEAPONS[Settings.weapon] || WEAPONS.hitscan; }
 // Training augments — temporarily override sens and FOV for training routines (AIMER7-inspired)
 const AUGMENTS = {
   smoothness: { label: 'Smoothness', sensMul: 1.15, fov: 80,  hint: '+15% sens · FOV 80  (tracking/precision)' },
-  speed:      { label: 'Speed',      sensMul: 1/3,  fov: 130, hint: '÷3 sens · FOV 130  (big flicks / target switching)' }
+  speed:      { label: 'Speed',      sensMul: 1/3,  fov: 130, hint: '1/3 sens · FOV 130  (big flicks / target switching)' }
 };
 
 const Settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -4457,7 +4459,8 @@ function animate(now) {
 
   // Strafe tutorial — if player hasn't moved within 5s of starting a movement scenario, pause and explain
   if ((mode === 'dodge' || mode === 'pole' || mode === 'cylinder') &&
-      gameActive && !gamePaused && !strafeTutorialShown && !hasMovedThisRun) {
+      gameActive && !gamePaused && !strafeTutorialShown && !hasMovedThisRun &&
+      !Settings.strafeTutorialSeen) {
     if (elapsedSeconds() >= 5) {
       strafeTutorialShown = true;
       strafeTutorialActive = true;
@@ -5526,15 +5529,20 @@ syncDifficultyButtons();
 $('btn-settings').onclick = openSettings;
 
 // Strafe tutorial dismiss — unpause + resume
-$('tut-dismiss').onclick = () => {
+function dismissStrafeTutorial(forever) {
   if (!strafeTutorialActive) return;
   strafeTutorialActive = false;
-  // Mirror the resumeGame logic (we set gamePaused/pausedAt manually)
+  if (forever) {
+    Settings.strafeTutorialSeen = true;
+    saveSettings();
+  }
   totalPausedMs += Date.now() - pausedAt;
   gamePaused = false;
   showOnly(null);
   requestLock();
-};
+}
+$('tut-dismiss').onclick = () => dismissStrafeTutorial(false);
+$('tut-never').onclick = () => dismissStrafeTutorial(true);
 
 // Training augment toggle
 function syncAugmentButtons() {
