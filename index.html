@@ -413,6 +413,94 @@
     box-shadow: 0 0 16px rgba(6,182,212,0.3);
   }
 
+  /* Big difficulty toggle */
+  .difficulty-toggle {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r);
+    padding: 4px;
+    margin: 12px auto 22px;
+    gap: 4px;
+    box-shadow: var(--shadow);
+  }
+  .diff-btn {
+    padding: 12px 32px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    border-radius: calc(var(--r) - 4px);
+    transition: all var(--t-fast);
+  }
+  .diff-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.05); }
+  .diff-btn.active {
+    background: var(--accent);
+    color: #001318;
+    box-shadow: 0 0 18px rgba(6,182,212,0.35);
+  }
+
+  /* Scenario list */
+  .scenario-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 560px;
+    width: 100%;
+  }
+  .scenario-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .scenario-card:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+  .scenario-info { flex: 1; }
+  .scenario-name {
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+  }
+  .scenario-desc {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+    font-weight: 500;
+  }
+  .scenario-buttons { display: flex; gap: 6px; }
+  .play-btn {
+    padding: 10px 18px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: all var(--t-fast);
+  }
+  .play-btn:hover { transform: translateY(-1px); }
+  .play-btn:active { transform: translateY(0) scale(0.98); }
+  .play-btn.click { border-left: 3px solid #ef4444; }
+  .play-btn.click:hover { background: rgba(239,68,68,0.16); border-color: #ef4444; }
+  .play-btn.track { border-left: 3px solid var(--accent); }
+  .play-btn.track:hover { background: rgba(6,182,212,0.16); border-color: var(--accent); }
+
   .menu-controls {
     display: flex;
     justify-content: center;
@@ -1138,53 +1226,56 @@
     <div class="cal-hint">Browser pointer lock loses raw counts to OS pointer settings — calibrate or tweak the value above. <b>Setup</b> reopens the welcome flow.</div>
   </div>
 
-  <div class="menu-controls">
-    <label>Difficulty:
-      <select id="difficulty-select">
-        <option value="easy">Easy</option>
-        <option value="normal" selected>Normal</option>
-        <option value="hard">Hard</option>
-      </select>
-    </label>
-    <label>Weapon:
-      <select id="menu-weapon-select">
-        <option value="hitscan">Click Timing</option>
-        <option value="tracking">Tracking</option>
-      </select>
-    </label>
-    <label>Pursuer Pattern:
-      <select id="menu-pattern-select">
-        <option value="long">Long (Easiest)</option>
-        <option value="medium">Medium</option>
-        <option value="short">Short (Hardest)</option>
-        <option value="varied">Varied</option>
-      </select>
-    </label>
+  <div class="difficulty-toggle">
+    <button class="diff-btn" data-diff="easy">Easy</button>
+    <button class="diff-btn active" data-diff="normal">Normal</button>
+    <button class="diff-btn" data-diff="hard">Hard</button>
   </div>
 
-  <div class="section-label">Click Timing</div>
-  <div class="menu-grid">
-    <button class="btn primary" id="btn-classic"><span class="cat-dot click-timing"></span>Classic<span class="desc">Hit 50 targets · fastest time wins</span></button>
-    <button class="btn warn" id="btn-endurance"><span class="cat-dot click-timing"></span>Endurance<span class="desc">Survive 60s · don't miss</span></button>
-    <button class="btn muted" id="btn-zen"><span class="cat-dot none"></span>Zen<span class="desc">No timer · just shoot</span></button>
-    <button class="btn success" id="btn-flicks"><span class="cat-dot click-timing"></span>Flicks<span class="desc">One target at random spots</span></button>
+  <div class="scenario-list">
+    <div class="scenario-card">
+      <div class="scenario-info">
+        <div class="scenario-name">Tracking</div>
+        <div class="scenario-desc">Bouncing sphere targets in a panel</div>
+      </div>
+      <div class="scenario-buttons">
+        <button class="play-btn click" data-mode="tracking" data-weapon="hitscan">Click</button>
+        <button class="play-btn track" data-mode="tracking" data-weapon="tracking">Track</button>
+      </div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-info">
+        <div class="scenario-name">Pursuer</div>
+        <div class="scenario-desc">One cylinder bot orbits and kites you · HP bar</div>
+      </div>
+      <div class="scenario-buttons">
+        <button class="play-btn click" data-mode="cylinder" data-weapon="hitscan">Click</button>
+        <button class="play-btn track" data-mode="cylinder" data-weapon="tracking">Track</button>
+      </div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-info">
+        <div class="scenario-name">Dodge</div>
+        <div class="scenario-desc">WASD around a room · strafe to the green zone for ×2</div>
+      </div>
+      <div class="scenario-buttons">
+        <button class="play-btn click" data-mode="dodge" data-weapon="hitscan">Click</button>
+        <button class="play-btn track" data-mode="dodge" data-weapon="tracking">Track</button>
+      </div>
+    </div>
+    <div class="scenario-card">
+      <div class="scenario-info">
+        <div class="scenario-name">Pole Practice</div>
+        <div class="scenario-desc">Stationary thin pole · pure strafe-timing drill</div>
+      </div>
+      <div class="scenario-buttons">
+        <button class="play-btn click" data-mode="pole" data-weapon="hitscan">Click</button>
+        <button class="play-btn track" data-mode="pole" data-weapon="tracking">Track</button>
+      </div>
+    </div>
   </div>
 
-  <div class="section-label">Tracking & Movement</div>
-  <div class="menu-grid">
-    <button class="btn success" id="btn-tracking"><span class="cat-dot tracking"></span>Tracking<span class="desc">Bouncing targets · headshots ×2</span></button>
-    <button class="btn success" id="btn-cylinder"><span class="cat-dot tracking"></span>Pursuer<span class="desc">One bot kites you · health bar</span></button>
-    <button class="btn danger" id="btn-dodge"><span class="cat-dot target-switch"></span>Dodge<span class="desc">WASD · strafe with the bar for ×2</span></button>
-    <button class="btn warn" id="btn-pole"><span class="cat-dot target-switch"></span>Pole Practice<span class="desc">Stationary thin pole · pure strafe-form drill</span></button>
-  </div>
-
-  <div class="cat-legend">
-    <span><span class="cat-dot tracking"></span>Tracking</span>
-    <span><span class="cat-dot click-timing"></span>Click Timing</span>
-    <span><span class="cat-dot target-switch"></span>Target Switching</span>
-  </div>
-
-  <div class="row" style="margin-top:14px;">
+  <div class="row" style="margin-top:18px;">
     <button class="btn muted" id="btn-settings">⚙ Settings</button>
   </div>
 </div>
@@ -1287,14 +1378,6 @@
         </div>
         <div class="field"><label>Walk speed (m/s)</label><input type="range" id="set-speed" min="3" max="9" step="0.1"><span class="value" id="set-speed-v"></span></div>
         <div class="field"><label>Tracking targets</label><input type="number" id="set-tracking-count" min="1" max="8"></div>
-        <div class="field"><label>Pursuer pattern</label>
-          <select id="set-pursuer-pattern">
-            <option value="long">Long strafes (easiest aim)</option>
-            <option value="medium">Medium strafes</option>
-            <option value="short">Short strafes (hardest aim)</option>
-            <option value="varied">Varied</option>
-          </select>
-        </div>
       </div>
     </div>
     <div class="row" style="margin-top: 14px;">
@@ -1424,7 +1507,6 @@ const DEFAULT_SETTINGS = {
   walkSpeed: 5.5,
   trackingCount: 4,
   weapon: 'hitscan',
-  pursuerPattern: 'varied',
   hudInset: 16
 };
 
@@ -1909,14 +1991,13 @@ for (let i = 0; i < GRID_SIZE; i++) {
 const PANEL_HALF_W = 5.5;
 const PANEL_TOP    = PANEL_Y + 2.6;
 const PANEL_BOTTOM = PANEL_Y - 2.6;
-const ENEMY_BODY_SIZE = 0.85;
-const ENEMY_HEAD_SIZE = 0.42;
+const ENEMY_BODY_SIZE = 0.45;  // sphere radius
+const ENEMY_HEAD_SIZE = 0.22;  // sphere radius
 const ENEMY_Z = PANEL_Z + 0.45;
+const TRACKING_GRAVITY = 9.0;
 
-const enemyBodyGeo = new THREE.BoxGeometry(ENEMY_BODY_SIZE, ENEMY_BODY_SIZE, 0.3);
-const enemyHeadGeo = new THREE.BoxGeometry(ENEMY_HEAD_SIZE, ENEMY_HEAD_SIZE, 0.3);
-const enemyEdgeBodyGeo = new THREE.EdgesGeometry(enemyBodyGeo);
-const enemyEdgeHeadGeo = new THREE.EdgesGeometry(enemyHeadGeo);
+const enemyBodyGeo = new THREE.SphereGeometry(ENEMY_BODY_SIZE, 22, 16);
+const enemyHeadGeo = new THREE.SphereGeometry(ENEMY_HEAD_SIZE, 16, 12);
 
 function makeEnemy(opts = {}) {
   const group = new THREE.Group();
@@ -1931,7 +2012,6 @@ function makeEnemy(opts = {}) {
   body.castShadow = true;
   body.userData.part = 'body';
   group.add(body);
-  body.add(new THREE.LineSegments(enemyEdgeBodyGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
 
   const headMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(Settings.headColor),
@@ -1939,12 +2019,12 @@ function makeEnemy(opts = {}) {
     emissiveIntensity: 1.0, metalness: 0.1, roughness: 0.5
   });
   const head = new THREE.Mesh(enemyHeadGeo, headMat);
-  head.position.y = (ENEMY_BODY_SIZE + ENEMY_HEAD_SIZE * headScale) / 2 + 0.04;
-  head.scale.set(headScale, headScale, 1);
+  // Stack the head sphere on top of the body sphere, slight overlap for connected look
+  head.position.y = ENEMY_BODY_SIZE + ENEMY_HEAD_SIZE * headScale - 0.06;
+  head.scale.set(headScale, headScale, headScale);
   head.castShadow = true;
   head.userData.part = 'head';
   group.add(head);
-  head.add(new THREE.LineSegments(enemyEdgeHeadGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
 
   const e = {
     group, body, head, bodyMat, headMat,
@@ -2013,18 +2093,18 @@ function updateHpBars() {
 }
 
 function placeEnemyOnPanel(e) {
-  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
-  const halfH = ((PANEL_TOP - PANEL_BOTTOM) - ENEMY_BODY_SIZE - ENEMY_HEAD_SIZE) / 2;
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE - 0.2;
+  // Spawn near bottom and let gravity arc them upward
   e.group.position.set(
     (Math.random() * 2 - 1) * halfW,
-    PANEL_Y - ENEMY_HEAD_SIZE / 2 + (Math.random() * 2 - 1) * halfH,
+    PANEL_BOTTOM + ENEMY_BODY_SIZE + 0.1,
     ENEMY_Z
   );
   const diff = currentDifficulty();
-  const speed = (2.4 + Math.random() * 2.0) * diff.speedMul;
-  const angle = Math.random() * Math.PI * 2;
-  e.vx = Math.cos(angle) * speed;
-  e.vy = Math.sin(angle) * speed * 0.55;
+  const horizSpeed = (2.0 + Math.random() * 2.0) * diff.speedMul;
+  e.vx = (Math.random() < 0.5 ? -1 : 1) * horizSpeed;
+  // Initial upward velocity — combined with gravity gives a satisfying arc
+  e.vy = (5.5 + Math.random() * 2.0) * Math.sqrt(diff.speedMul);
   e.hp = e.hpMax;
   e.dirChangeTimer = diff.dirChangeMs * (0.5 + Math.random());
   playSpawnAt(e.group.position.x, e.group.position.y, e.group.position.z);
@@ -2050,28 +2130,26 @@ function placeEnemyAroundPlayer(e) {
 
 function updateEnemies(dt) {
   if (mode !== 'tracking') return;
-  const diff = currentDifficulty();
-  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
-  const lowerY = PANEL_BOTTOM + ENEMY_BODY_SIZE / 2 + 0.1;
-  const upperY = PANEL_TOP - ENEMY_HEAD_SIZE - ENEMY_BODY_SIZE / 2 - 0.1;
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE - 0.2;
+  const lowerY = PANEL_BOTTOM + ENEMY_BODY_SIZE + 0.1;
+  const upperY = PANEL_TOP - ENEMY_BODY_SIZE - ENEMY_HEAD_SIZE * 2;
   for (const e of enemies) {
-    if (diff.dirChangeMs > 0) {
-      e.dirChangeTimer -= dt * 1000;
-      if (e.dirChangeTimer <= 0) {
-        const cur = Math.atan2(e.vy, e.vx);
-        const speed = Math.hypot(e.vx, e.vy);
-        const turn = (Math.random() - 0.5) * Math.PI * 0.8;
-        e.vx = Math.cos(cur + turn) * speed;
-        e.vy = Math.sin(cur + turn) * speed;
-        e.dirChangeTimer = diff.dirChangeMs * (0.5 + Math.random());
-      }
-    }
+    if (e.respawnAt) continue;
+    // Gravity arc — vy decreases each frame, ball falls and bounces
+    e.vy -= TRACKING_GRAVITY * dt;
     e.group.position.x += e.vx * dt;
     e.group.position.y += e.vy * dt;
     if (e.group.position.x >  halfW) { e.group.position.x =  halfW; e.vx = -e.vx; }
     if (e.group.position.x < -halfW) { e.group.position.x = -halfW; e.vx = -e.vx; }
-    if (e.group.position.y > upperY) { e.group.position.y = upperY; e.vy = -e.vy; }
-    if (e.group.position.y < lowerY) { e.group.position.y = lowerY; e.vy = -e.vy; }
+    if (e.group.position.y < lowerY) {
+      e.group.position.y = lowerY;
+      // Bounce up — preserve enough velocity for a good arc, with slight randomness
+      e.vy = Math.max(Math.abs(e.vy), 5.0) + (Math.random() * 0.6);
+    }
+    if (e.group.position.y > upperY) {
+      e.group.position.y = upperY;
+      e.vy = -Math.abs(e.vy);
+    }
   }
 }
 
@@ -2250,12 +2328,11 @@ const DIFFICULTY = {
 function currentDifficulty() { return DIFFICULTY[Settings.difficulty] || DIFFICULTY.normal; }
 
 function pickPursuerDuration() {
-  const p = Settings.pursuerPattern || 'varied';
-  if (p === 'short')  return 0.6 + Math.random() * 0.4;  // 0.6–1.0s
-  if (p === 'medium') return 1.2 + Math.random() * 0.6;  // 1.2–1.8s
-  if (p === 'long')   return 2.0 + Math.random() * 0.8;  // 2.0–2.8s
-  // varied: full range
-  return 0.6 + Math.random() * 2.2;                       // 0.6–2.8s
+  // Difficulty-driven: easy = long strafes (easier), hard = short strafes (harder)
+  const d = Settings.difficulty;
+  if (d === 'easy')   return 2.0 + Math.random() * 0.8;  // 2.0–2.8s
+  if (d === 'hard')   return 0.6 + Math.random() * 0.4;  // 0.6–1.0s
+  return 1.2 + Math.random() * 0.6;                       // 1.2–1.8s normal
 }
 
 function playFlipBeep() {
@@ -2473,9 +2550,9 @@ document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
 
   if (e.code === 'KeyF') { e.preventDefault(); toggleFullscreen(); }
-  else if (e.code === 'KeyR' && mode) { e.preventDefault(); startGame(mode); }
-  else if (e.code === 'Digit1') { e.preventDefault(); setWeapon('hitscan'); }
-  else if (e.code === 'Digit2') { e.preventDefault(); setWeapon('tracking'); }
+  else if (e.code === 'KeyR' && mode) { e.preventDefault(); startGame(mode, weaponLocked ? Settings.weapon : null); }
+  else if (e.code === 'Digit1' && !weaponLocked) { e.preventDefault(); setWeapon('hitscan'); }
+  else if (e.code === 'Digit2' && !weaponLocked) { e.preventDefault(); setWeapon('tracking'); }
   else if (e.code === 'Escape' && gameActive) {
     if (gamePaused) { quitToMenu(); }
     else { pauseGame(); }
@@ -2496,11 +2573,8 @@ function setWeapon(name) {
   Settings.weapon = name;
   saveSettings();
   syncWeaponHud();
-  // Also sync UI selects so they stay consistent
-  const sel1 = $('set-weapon');
-  if (sel1) sel1.value = name;
-  const sel2 = $('menu-weapon-select');
-  if (sel2) sel2.value = name;
+  const sel = $('set-weapon');
+  if (sel) sel.value = name;
 }
 for (const slot of weaponHud.querySelectorAll('.weapon-slot')) {
   slot.addEventListener('mousedown', (e) => {
@@ -3116,13 +3190,21 @@ function showMainMenu() {
   clearEnemies();
   gameActive = false;
   gamePaused = false;
+  weaponLocked = false;
   mode = '';
   stopTimer();
   if (document.exitPointerLock) document.exitPointerLock();
 }
 
-function startGame(m) {
+let weaponLocked = false;
+function startGame(m, lockedWeapon = null) {
   ensureAudio();
+  if (lockedWeapon) {
+    setWeapon(lockedWeapon);
+    weaponLocked = true;
+  } else {
+    weaponLocked = false;
+  }
   mode = m;
   score = 0; shotsFired = 0; shotsHit = 0; headshots = 0;
   streak = 0; bestStreak = 0;
@@ -3607,11 +3689,6 @@ syncFns.push(bindSelect('set-weapon', () => Settings.weapon, v => Settings.weapo
 syncFns.push(bindSelect('set-difficulty', () => Settings.difficulty, v => Settings.difficulty = v));
 syncFns.push(bindRange ('set-speed', 'set-speed-v', () => Settings.walkSpeed, v => Settings.walkSpeed = v));
 syncFns.push(bindNumber('set-tracking-count', () => Settings.trackingCount, v => Settings.trackingCount = Math.max(1, Math.min(8, Math.round(v)))));
-syncFns.push(bindSelect('set-pursuer-pattern', () => Settings.pursuerPattern, v => {
-  Settings.pursuerPattern = v;
-  const ms = $('menu-pattern-select');
-  if (ms) ms.value = v;
-}));
 
 function syncSettingsUI() { for (const fn of syncFns) fn(); }
 
@@ -3622,9 +3699,8 @@ function onSettingsChanged() {
   document.documentElement.style.setProperty('--hud-inset', Settings.hudInset + 'px');
   renderCrosshair();
   refreshEnemyColors();
-  // Reflect difficulty in main menu select too
-  const ds = $('difficulty-select');
-  if (ds) ds.value = Settings.difficulty;
+  // Reflect difficulty in main menu toggle too
+  if (typeof syncDifficultyButtons === 'function') syncDifficultyButtons();
   saveSettings();
 }
 
@@ -3637,44 +3713,44 @@ $('settings-reset').onclick = () => {
 };
 
 // ============================================================================
-// Wire menu buttons
+// Wire menu — scenario cards + difficulty toggle
 // ============================================================================
-$('btn-classic').onclick   = () => startGame('classic');
-$('btn-endurance').onclick = () => startGame('endurance');
-$('btn-zen').onclick       = () => startGame('zen');
-$('btn-flicks').onclick    = () => startGame('flicks');
-$('btn-tracking').onclick  = () => startGame('tracking');
-$('btn-dodge').onclick     = () => startGame('dodge');
-$('btn-cylinder').onclick  = () => startGame('cylinder');
-$('btn-pole').onclick      = () => startGame('pole');
-$('btn-settings').onclick  = openSettings;
+for (const btn of document.querySelectorAll('.play-btn')) {
+  btn.addEventListener('click', () => {
+    const m = btn.dataset.mode;
+    const w = btn.dataset.weapon;
+    startGame(m, w);
+  });
+}
 
-$('difficulty-select').onchange = (e) => {
-  Settings.difficulty = e.target.value;
-  saveSettings();
-};
-$('difficulty-select').value = Settings.difficulty;
+const difficultyButtons = document.querySelectorAll('.diff-btn');
+function syncDifficultyButtons() {
+  for (const b of difficultyButtons) {
+    b.classList.toggle('active', b.dataset.diff === Settings.difficulty);
+  }
+}
+for (const b of difficultyButtons) {
+  b.addEventListener('click', () => {
+    Settings.difficulty = b.dataset.diff;
+    saveSettings();
+    syncDifficultyButtons();
+    const sel = $('set-difficulty');
+    if (sel) sel.value = Settings.difficulty;
+  });
+}
+syncDifficultyButtons();
 
-$('menu-weapon-select').onchange = (e) => setWeapon(e.target.value);
-$('menu-weapon-select').value = Settings.weapon;
-
-$('menu-pattern-select').onchange = (e) => {
-  Settings.pursuerPattern = e.target.value;
-  saveSettings();
-  const sel = $('set-pursuer-pattern');
-  if (sel) sel.value = e.target.value;
-};
-$('menu-pattern-select').value = Settings.pursuerPattern;
+$('btn-settings').onclick = openSettings;
 
 // Pause menu buttons
 $('pause-resume').onclick    = resumeGame;
-$('pause-restart').onclick   = () => { resumeGame(); startGame(mode); };
+$('pause-restart').onclick   = () => { const w = weaponLocked ? Settings.weapon : null; resumeGame(); startGame(mode, w); };
 $('pause-settings').onclick  = openSettings;
 $('pause-fullscreen').onclick = toggleFullscreen;
 $('pause-menu-btn').onclick  = quitToMenu;
 
 // Game over buttons
-$('btn-retry').onclick = () => startGame(mode);
+$('btn-retry').onclick = () => startGame(mode, weaponLocked ? Settings.weapon : null);
 $('btn-menu').onclick  = showMainMenu;
 
 // ============================================================================
