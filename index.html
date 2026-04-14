@@ -2097,6 +2097,7 @@ const enemyHeadGeo = new THREE.SphereGeometry(ENEMY_HEAD_SIZE, 16, 12);
 function makeEnemy(opts = {}) {
   const group = new THREE.Group();
   const headScale = opts.headScale ?? 1;
+  group.scale.setScalar(currentDifficulty().targetScale);
 
   const bodyMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(Settings.targetColor),
@@ -2146,11 +2147,14 @@ function makeBouncingTarget() {
   const body = new THREE.Mesh(bounceTargetGeo, mat);
   body.castShadow = true;
   body.userData.part = 'body';
+  const scale = currentDifficulty().targetScale;
+  body.scale.setScalar(scale);
   group.add(body);
   const e = {
     group, body, head: null, bodyMat: mat, headMat: null,
     vx: 0, vy: 0, vz: 0,
     hp: 1, hpMax: 1,
+    radius: BOUNCE_TARGET_RADIUS * scale,
     flashUntil: 0,
     bouncing: true
   };
@@ -2161,7 +2165,7 @@ function makeBouncingTarget() {
 }
 
 function placeBouncingTarget(e) {
-  const r = BOUNCE_TARGET_RADIUS;
+  const r = e.radius;
   e.group.position.set(
     -BOUNCE_X + r + Math.random() * (BOUNCE_X * 2 - 2 * r),
     BOUNCE_Y_BOT + r + Math.random() * (BOUNCE_Y_TOP - BOUNCE_Y_BOT - 2 * r),
@@ -2181,11 +2185,10 @@ function placeBouncingTarget(e) {
 
 function updateBouncingTargets(dt) {
   if (mode !== 'bouncing') return;
-  const r = BOUNCE_TARGET_RADIUS;
   // Cap speeds + integrate position
   for (const e of enemies) {
     if (e.respawnAt) continue;
-    // clamp speed
+    const r = e.radius;
     const sp = Math.hypot(e.vx, e.vy, e.vz);
     if (sp > BOUNCE_MAX_SPEED) {
       const k = BOUNCE_MAX_SPEED / sp;
@@ -2194,7 +2197,6 @@ function updateBouncingTargets(dt) {
     e.group.position.x += e.vx * dt;
     e.group.position.y += e.vy * dt;
     e.group.position.z += e.vz * dt;
-    // Wall bounces (axis-aligned)
     if (e.group.position.x - r < -BOUNCE_X) { e.group.position.x = -BOUNCE_X + r; e.vx =  Math.abs(e.vx); }
     if (e.group.position.x + r >  BOUNCE_X) { e.group.position.x =  BOUNCE_X - r; e.vx = -Math.abs(e.vx); }
     if (e.group.position.y - r < BOUNCE_Y_BOT) { e.group.position.y = BOUNCE_Y_BOT + r; e.vy =  Math.abs(e.vy); }
@@ -2203,14 +2205,14 @@ function updateBouncingTargets(dt) {
     if (e.group.position.z + r > BOUNCE_Z_NEAR) { e.group.position.z = BOUNCE_Z_NEAR - r; e.vz = -Math.abs(e.vz); }
   }
   // Sphere-sphere collisions (equal-mass elastic)
-  const minDist = 2 * r;
-  const minDist2 = minDist * minDist;
   for (let i = 0; i < enemies.length; i++) {
     const a = enemies[i];
     if (a.respawnAt || !a.bouncing) continue;
     for (let j = i + 1; j < enemies.length; j++) {
       const b = enemies[j];
       if (b.respawnAt || !b.bouncing) continue;
+      const minDist = a.radius + b.radius;
+      const minDist2 = minDist * minDist;
       const dx = b.group.position.x - a.group.position.x;
       const dy = b.group.position.y - a.group.position.y;
       const dz = b.group.position.z - a.group.position.z;
@@ -2367,6 +2369,8 @@ const cylHeadGeo = new THREE.SphereGeometry(CYL_HEAD_RADIUS, 18, 14);
 
 function makeCylinder() {
   const group = new THREE.Group();
+  const scale = currentDifficulty().targetScale;
+  group.scale.setScalar(scale);
   const bodyMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(Settings.targetColor),
     emissive: new THREE.Color(0x666666),
@@ -2413,6 +2417,9 @@ const poleGeo = new THREE.CylinderGeometry(POLE_RADIUS, POLE_RADIUS, POLE_HEIGHT
 
 function makePole() {
   const group = new THREE.Group();
+  const scale = currentDifficulty().targetScale;
+  // Pole scaling — only narrow horizontally so vertical hit area doesn't shrink to nothing
+  group.scale.set(scale, 1, scale);
   const bodyMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(Settings.targetColor),
     emissive: new THREE.Color(0x666666),
@@ -2515,9 +2522,9 @@ function updateCylinders(dt) {
 // Difficulty
 // ============================================================================
 const DIFFICULTY = {
-  easy:   { speedMul: 0.85, headScale: 1.2, dirChangeMs: 2500 },
-  normal: { speedMul: 1.2,  headScale: 1.0, dirChangeMs: 1800 },
-  hard:   { speedMul: 1.8,  headScale: 0.7, dirChangeMs: 1200 }
+  easy:   { speedMul: 0.85, headScale: 1.2, dirChangeMs: 2500, targetScale: 1.25 },
+  normal: { speedMul: 1.2,  headScale: 1.0, dirChangeMs: 1800, targetScale: 1.00 },
+  hard:   { speedMul: 1.8,  headScale: 0.7, dirChangeMs: 1200, targetScale: 0.72 }
 };
 function currentDifficulty() { return DIFFICULTY[Settings.difficulty] || DIFFICULTY.normal; }
 
@@ -3684,7 +3691,8 @@ function gameOver(won) {
   let pbDeltaBad = false;
   let history = [];
   if (bestKey) {
-    const fullKey = bestKey + '-' + Settings.difficulty;
+    // Append weapon so click/track have separate tables per scenario+difficulty
+    const fullKey = bestKey + '-' + Settings.difficulty + '-' + Settings.weapon;
     lastHistoryKey = fullKey;
     lastHistoryLower = lower;
     const stored = localStorage.getItem('best2_' + fullKey);
