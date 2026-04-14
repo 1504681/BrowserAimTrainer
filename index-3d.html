@@ -216,6 +216,65 @@
     background: #e94560;
   }
 
+  /* Pursuer direction bar */
+  #dir-bar {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,11,16,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 22px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    z-index: 4;
+    display: none;
+    text-align: center;
+    min-width: 320px;
+    box-shadow: var(--shadow);
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  #dir-bar.show { display: block; }
+  #dir-bar .dir-text {
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    color: var(--text);
+  }
+  #dir-bar .dir-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  #dir-bar .dir-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    width: 0%;
+    border-radius: 999px;
+    transition: none;
+  }
+  #dir-bar .dir-hint {
+    font-size: 0.62rem;
+    opacity: 0.45;
+    margin-top: 7px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  #dir-bar.correct {
+    border-color: var(--success);
+    background: rgba(16,185,129,0.18);
+  }
+  #dir-bar.correct .dir-text { color: var(--success); }
+  #dir-bar.wrong {
+    border-color: var(--danger);
+  }
+  #dir-bar.wrong .dir-text { color: var(--danger); }
+
   /* Dodge bar */
   #dodge-bar {
     position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
@@ -859,6 +918,12 @@
   <span class="weapon-slot" data-w="tracking"><b>2</b> Tracking</span>
 </div>
 
+<div id="dir-bar">
+  <div class="dir-text" id="dir-bar-text">— STRAFE —</div>
+  <div class="dir-track"><div class="dir-fill" id="dir-bar-fill"></div></div>
+  <div class="dir-hint">switch direction when bar fills · ×2 when correct</div>
+</div>
+
 <!-- ===== Main Menu ===== -->
 <div id="menu" class="screen show">
   <h1>Browser Aim Trainer<span class="badge">3D · FPS</span></h1>
@@ -1343,6 +1408,11 @@ let dodgeDir = 'left';
 let dodgeNextFlip = 0;
 let dodgeMul = 1;
 
+// Pursuer direction-bar state
+let pursuerDir = 'left';
+let pursuerFill = 0;       // 0..1
+let pursuerMul = 1;
+
 // Camera rotation
 let yaw = 0;
 let pitch = 0;
@@ -1365,6 +1435,9 @@ const fsButton = $('btn-fullscreen');
 const hsToast = $('hs-toast');
 const dodgeBar = $('dodge-bar');
 const dodgeArrow = $('dodge-arrow');
+const dirBar = $('dir-bar');
+const dirBarText = $('dir-bar-text');
+const dirBarFill = $('dir-bar-fill');
 const weaponHud = $('weapon-hud');
 const hpBarLayer = document.createElement('div');
 hpBarLayer.id = 'hp-bar-layer';
@@ -1809,6 +1882,25 @@ const DIFFICULTY = {
   hard:   { speedMul: 1.8,  headScale: 0.7, dirChangeMs: 1200 }
 };
 function currentDifficulty() { return DIFFICULTY[Settings.difficulty] || DIFFICULTY.normal; }
+
+function pursuerFillDuration() {
+  if (Settings.difficulty === 'easy') return 4.0;
+  if (Settings.difficulty === 'hard') return 1.6;
+  return 2.5;
+}
+
+function playFlipBeep() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(880, t);
+  g.gain.setValueAtTime(0.12 * vol(), t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.09);
+}
 
 // ============================================================================
 // Skybox presets
@@ -2284,6 +2376,7 @@ function handleEnemyHit(enemy, part) {
   if (enemy.hp <= 0) {
     let pts = isHead ? 2 : 1;
     if (mode === 'dodge') pts = Math.round(pts * dodgeMul);
+    else if (mode === 'cylinder') pts = Math.round(pts * pursuerMul);
     score += pts;
     if (isHead) headshots++;
     scoreVal.textContent = score;
@@ -2451,6 +2544,25 @@ function animate(now) {
     }
   }
 
+  // Pursuer direction-bar update
+  if (mode === 'cylinder' && gameActive && !gamePaused) {
+    const dur = pursuerFillDuration();
+    pursuerFill += dt / dur;
+    if (pursuerFill >= 1) {
+      pursuerFill = 0;
+      pursuerDir = (pursuerDir === 'left') ? 'right' : 'left';
+      playFlipBeep();
+    }
+    dirBarFill.style.width = (pursuerFill * 100) + '%';
+    dirBarText.textContent = (pursuerDir === 'left') ? '← STRAFE LEFT' : 'STRAFE RIGHT →';
+    const left  = !!keys['KeyA'] && !keys['KeyD'];
+    const right = !!keys['KeyD'] && !keys['KeyA'];
+    const correct = (pursuerDir === 'left' && left) || (pursuerDir === 'right' && right);
+    pursuerMul = correct ? 2 : (left || right ? 1 : 0.5);
+    dirBar.classList.toggle('correct', correct);
+    dirBar.classList.toggle('wrong', !correct && (left || right));
+  }
+
   // Dodge bar update
   if (mode === 'dodge' && gameActive && !gamePaused) {
     if (now > dodgeNextFlip) {
@@ -2510,6 +2622,7 @@ function showMainMenu() {
   crosshair.classList.remove('show');
   streakEl.classList.remove('show');
   dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
   weaponHud.classList.remove('show');
   dodgeRoom.visible = false;
   backWall.visible = true;
@@ -2550,6 +2663,7 @@ function startGame(m) {
   // Configure scene per mode
   dodgeRoom.visible = false;
   dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
   weaponHud.classList.add('show');
   backWall.visible = true;
   for (const t of tileMeshes) t.visible = true;
@@ -2597,6 +2711,11 @@ function startGame(m) {
     backWall.visible = false;
     dodgeRoom.visible = true;
     pitch = 0;
+    pursuerDir = Math.random() < 0.5 ? 'left' : 'right';
+    pursuerFill = 0;
+    pursuerMul = 1;
+    dirBar.classList.add('show');
+    dirBar.classList.remove('correct', 'wrong');
     const e = makeCylinder();
     placeCylinder(e);
     timerDuration = CYLINDER_DURATION;
@@ -2642,6 +2761,7 @@ function gameOver(won) {
   streakEl.classList.remove('show');
   hud.classList.add('hide');
   dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
   weaponHud.classList.remove('show');
 
   const elapsed = elapsedSeconds().toFixed(2);
