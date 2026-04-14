@@ -1,6 +1,7 @@
 name = "browser-aim-trainer-leaderboard"
 main = "index.js"
 compatibility_date = "2025-01-01"
+account_id = "b01300bbca204b8dbf4a08bf977240f4"
 
 # KV namespace already provisioned for the trainer leaderboard.
 [[kv_namespaces]]
