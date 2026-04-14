@@ -81,6 +81,68 @@
   #hud.hide { display: none; }
   #hud .label { opacity: 0.55; font-weight: 500; margin-right: 4px; }
 
+  /* Leaderboard panel — anchored top-right when the game over overlay is up */
+  #leaderboard {
+    position: fixed;
+    top: 50%;
+    right: 32px;
+    transform: translateY(-50%);
+    width: 260px;
+    max-height: 70vh;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 26;
+    display: none;
+    overflow: hidden;
+  }
+  #leaderboard.show { display: block; }
+  @media (max-width: 1100px) { #leaderboard { display: none !important; } }
+  .lb-header {
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .lb-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    color: var(--text);
+  }
+  .lb-sub {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  .lb-rows { padding: 4px 0; max-height: calc(100vh - 270px); overflow-y: auto; }
+  .lb-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .lb-row.you { background: rgba(6,182,212,0.10); }
+  .lb-row .lb-rank { color: var(--text-dim); font-weight: 700; font-size: 0.7rem; }
+  .lb-row .lb-rank.gold { color: var(--gold); }
+  .lb-row .lb-rank.silver { color: #cbd5e1; }
+  .lb-row .lb-rank.bronze { color: #d97706; }
+  .lb-row .lb-score { font-weight: 800; color: var(--text); }
+  .lb-row .lb-acc { color: var(--text-dim); font-size: 0.7rem; font-weight: 600; }
+  .lb-empty {
+    padding: 16px 14px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
   /* Streak indicator */
   #streak {
     position: fixed; top: calc(var(--hud-inset) + 54px); right: var(--hud-inset);
@@ -1145,8 +1207,30 @@
     display: block;
     width: 100%;
     height: 70px;
-    pointer-events: none;
+    cursor: crosshair;
   }
+
+  /* Chart hover tooltip */
+  #chart-tooltip {
+    position: fixed;
+    background: rgba(8,9,14,0.96);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    display: none;
+    z-index: 80;
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+    line-height: 1.5;
+  }
+  #chart-tooltip.show { display: block; }
+  #chart-tooltip .tt-row { display: flex; gap: 16px; justify-content: space-between; }
+  #chart-tooltip .tt-key { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; font-size: 0.66rem; font-weight: 700; }
+  #chart-tooltip .tt-val { font-weight: 700; color: var(--text); }
+  #chart-tooltip .tt-val.gold { color: var(--gold); }
 
   /* Scenario detail screen */
   #scenario-detail .container {
@@ -1418,6 +1502,14 @@
 <div id="streak">
   <span class="label">Streak</span>
   <div class="value" id="streak-val">0</div>
+</div>
+
+<div id="leaderboard">
+  <div class="lb-header">
+    <div class="lb-title" id="lb-title">Scenario</div>
+    <div class="lb-sub" id="lb-sub">—</div>
+  </div>
+  <div class="lb-rows" id="lb-rows"></div>
 </div>
 
 <div id="hit-marker">
@@ -2209,6 +2301,7 @@ const accDisplay = $('acc-display');
 const accVal = $('acc-val');
 const streakEl = $('streak');
 const streakValEl = $('streak-val');
+const leaderboardEl = $('leaderboard');
 const hitMarker = $('hit-marker');
 
 const overTitle = $('over-title');
@@ -3290,6 +3383,8 @@ function drawLineChart(canvas, values, color, opts = {}) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const w = cssW, h = cssH;
   ctx.clearRect(0, 0, w, h);
+  // Store metadata for hover tooltip
+  canvas._chartData = null;
   if (values.length === 0) return;
 
   const padX = 6;
@@ -3301,11 +3396,19 @@ function drawLineChart(canvas, values, color, opts = {}) {
   let max = opts.max ?? Math.max(...values);
   let min = opts.min ?? Math.min(...values);
   if (max === min) { max += 1; min -= 1; }
-  // pad range slightly
-  const pad = (max - min) * 0.15;
+  // Enforce a minimum visible range so clustered runs still show variation
+  const minRange = opts.minRange ?? Math.max(2, Math.abs(max) * 0.08);
+  if (max - min < minRange) {
+    const center = (max + min) / 2;
+    min = center - minRange / 2;
+    max = center + minRange / 2;
+  }
+  // Padding above and below
+  const pad = (max - min) * 0.18;
   max += pad; min -= pad;
-  if (opts.fixedMin !== undefined) min = opts.fixedMin;
-  if (opts.fixedMax !== undefined) max = opts.fixedMax;
+  // Optional hard clamps (e.g., accuracy can't be < 0 or > 100)
+  if (opts.clampMin !== undefined) min = Math.max(opts.clampMin, min);
+  if (opts.clampMax !== undefined) max = Math.min(opts.clampMax, max);
   const range = max - min;
 
   const xStep = values.length > 1 ? usableW / (values.length - 1) : 0;
@@ -3387,7 +3490,152 @@ function drawLineChart(canvas, values, color, opts = {}) {
     ctx.stroke();
     ctx.setLineDash([]);
   }
+
+  // Day dividers — vertical dashed line where the date changes between consecutive runs
+  if (opts.history && opts.history.length > 1) {
+    let prevDay = null;
+    for (let i = 0; i < opts.history.length; i++) {
+      const ts = opts.history[i].ts;
+      if (!ts) continue;
+      const day = new Date(ts).toDateString();
+      if (prevDay !== null && day !== prevDay) {
+        const x = padX + (i - 0.5) * xStep;
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, padTop);
+        ctx.lineTo(x, h - padBot);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      prevDay = day;
+    }
+  }
+
+  // Store metadata for hover lookup
+  canvas._chartData = {
+    values, history: opts.history || null,
+    padX, padTop, usableW, usableH, h, padBot, min, max, xStep,
+    suffix: opts.tooltipSuffix || ''
+  };
+
+  // Wire hover (once per canvas)
+  if (!canvas._hoverWired) {
+    canvas._hoverWired = true;
+    canvas.addEventListener('mousemove', (e) => showChartTooltip(canvas, e));
+    canvas.addEventListener('mouseleave', hideChartTooltip);
+  }
 }
+
+// ============================================================================
+// Chart hover tooltip
+// ============================================================================
+const chartTooltip = document.createElement('div');
+chartTooltip.id = 'chart-tooltip';
+document.body.appendChild(chartTooltip);
+
+function showChartTooltip(canvas, e) {
+  const data = canvas._chartData;
+  if (!data || !data.values.length) { hideChartTooltip(); return; }
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  // Map x → nearest index
+  const xStep = data.xStep || (data.values.length > 1 ? data.usableW / (data.values.length - 1) : 0);
+  let idx = data.values.length === 1 ? 0 : Math.round((x - data.padX) / xStep);
+  if (idx < 0) idx = 0;
+  if (idx >= data.values.length) idx = data.values.length - 1;
+
+  const v = data.values[idx];
+  const h = data.history ? data.history[idx] : null;
+  const isLatest = idx === data.values.length - 1;
+
+  let html = '';
+  html += `<div class="tt-row"><span class="tt-key">Attempt</span><span class="tt-val${isLatest ? ' gold' : ''}">#${idx + 1}${isLatest ? ' · latest' : ''}</span></div>`;
+  const display = Number.isInteger(v) ? v : v.toFixed(2);
+  html += `<div class="tt-row"><span class="tt-key">Value</span><span class="tt-val">${display}${data.suffix}</span></div>`;
+  if (h) {
+    if (h.acc !== undefined) html += `<div class="tt-row"><span class="tt-key">Accuracy</span><span class="tt-val">${h.acc}%</span></div>`;
+    if (h.hits !== undefined) html += `<div class="tt-row"><span class="tt-key">Hits</span><span class="tt-val">${h.hits}</span></div>`;
+    if (h.streak !== undefined && h.streak !== null) html += `<div class="tt-row"><span class="tt-key">Streak</span><span class="tt-val">${h.streak}</span></div>`;
+    if (h.ts) {
+      const d = new Date(h.ts);
+      const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+                      d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      html += `<div class="tt-row"><span class="tt-key">When</span><span class="tt-val">${dateStr}</span></div>`;
+    }
+  }
+
+  chartTooltip.innerHTML = html;
+  chartTooltip.classList.add('show');
+
+  // Position near the cursor, flipping if off the edge
+  let tx = e.clientX + 14;
+  let ty = e.clientY - 14;
+  const tw = 220;
+  const th = 130;
+  if (tx + tw > window.innerWidth - 8) tx = e.clientX - tw - 14;
+  if (ty + th > window.innerHeight - 8) ty = window.innerHeight - th - 8;
+  if (ty < 8) ty = 8;
+  chartTooltip.style.left = tx + 'px';
+  chartTooltip.style.top = ty + 'px';
+}
+
+function hideChartTooltip() {
+  chartTooltip.classList.remove('show');
+}
+
+// ============================================================================
+// Leaderboard panel — shown alongside game-over overlay
+// ============================================================================
+function refreshLeaderboard(modeKey, fullKey, lower) {
+  const info = SCENARIO_INFO[modeKey];
+  $('lb-title').textContent = info ? info.title : (modeKey || 'Scenario');
+  // Parse the fullKey for the sub line: <mode>-<diff>-<weapon>
+  const parts = fullKey.split('-');
+  const wpn = parts[parts.length - 1] === 'tracking' ? 'Track' : 'Click';
+  const diff = parts[parts.length - 2];
+  const niceDiff = diff.charAt(0).toUpperCase() + diff.slice(1);
+  $('lb-sub').textContent = `${niceDiff} · ${wpn}`;
+
+  const arr = getRunHistory(fullKey).slice();
+  // Sort: best first (lower-is-better for time, otherwise higher)
+  arr.sort((a, b) => lower ? (a.score - b.score) : (b.score - a.score));
+
+  const rowsEl = $('lb-rows');
+  rowsEl.innerHTML = '';
+  if (arr.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'lb-empty';
+    empty.textContent = 'No runs yet';
+    rowsEl.appendChild(empty);
+    return;
+  }
+
+  // Find the latest run by ts to flag "you" highlighting (not strictly needed but keeps groundwork for multi-user)
+  let latestTs = 0;
+  for (const r of arr) if (r.ts > latestTs) latestTs = r.ts;
+
+  arr.slice(0, 12).forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+    if (r.ts === latestTs) row.classList.add('you');
+    const rank = i + 1;
+    let rankClass = '';
+    if (rank === 1) rankClass = 'gold';
+    else if (rank === 2) rankClass = 'silver';
+    else if (rank === 3) rankClass = 'bronze';
+    const scoreText = lower ? r.score.toFixed(2) + 's' : r.score;
+    row.innerHTML =
+      `<div class="lb-rank ${rankClass}">${rank}</div>` +
+      `<div class="lb-score">${scoreText}</div>` +
+      `<div class="lb-acc">${r.acc != null ? r.acc + '%' : ''}</div>`;
+    rowsEl.appendChild(row);
+  });
+}
+
+function showLeaderboard() { leaderboardEl.classList.add('show'); }
+function hideLeaderboard() { leaderboardEl.classList.remove('show'); }
 
 function showHsToast() {
   hsToast.textContent = 'HEADSHOT';
@@ -3702,6 +3950,7 @@ function showMainMenu() {
   dodgeBar.classList.remove('show');
   dirBar.classList.remove('show');
   weaponHud.classList.remove('show');
+  hideLeaderboard();
   dodgeRoom.visible = false;
   bounceRoom.visible = false;
   backWall.visible = true;
@@ -3739,6 +3988,7 @@ function startGame(m, lockedWeapon = null) {
   pausedAt = 0;
 
   showOnly(null);
+  hideLeaderboard();
   hud.classList.remove('hide');
   crosshair.classList.add('show');
   streakEl.classList.add('show');
@@ -4160,6 +4410,8 @@ function gameOver(won) {
     const diffPart = activeCustomMode ? 'custom' : Settings.difficulty;
     const fullKey = bestKey + '-' + diffPart + '-' + Settings.weapon;
     lastHistoryKey = fullKey;
+    refreshLeaderboard(bestKey, fullKey, lower);
+    showLeaderboard();
     // Scoreboard label so player knows which highscore table this run is on
     const sbLabel = $('scoreboard-label');
     const niceMode  = bestKey.charAt(0).toUpperCase() + bestKey.slice(1);
@@ -4240,8 +4492,8 @@ function gameOver(won) {
     const accVals = history.map(r => r.acc);
     const scoreAvg = rollingAverage(scoreVals, 5);
     const accAvg = rollingAverage(accVals, 5);
-    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: scoreAvg });
-    drawLineChart(accCanvas,  accVals,  '#10b981', { fixedMin: 0, fixedMax: 100, overlay: accAvg });
+    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: scoreAvg, history, tooltipSuffix: lower ? 's' : '' });
+    drawLineChart(accCanvas,  accVals,  '#10b981', { overlay: accAvg, history, tooltipSuffix: '%', minRange: 5, clampMin: 0, clampMax: 100 });
     const lastScore = scoreVals[scoreVals.length - 1];
     $('chart-score-latest').textContent = lower ? lastScore.toFixed(2) + 's' : lastScore;
     $('chart-acc-latest').textContent = (accVals[accVals.length - 1] || 0) + '%';
@@ -4473,7 +4725,7 @@ function openScenarioDetail(modeKey) {
   $('sd-chart-key').textContent = `${Settings.difficulty} · ${Settings.weapon === 'tracking' ? 'track' : 'click'}`;
   if (history.length > 0) {
     const scoreVals = history.map(r => r.score);
-    drawLineChart(canvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5) });
+    drawLineChart(canvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5), history });
     $('sd-chart-latest').textContent = scoreVals[scoreVals.length - 1];
   } else {
     canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
@@ -4622,8 +4874,8 @@ function openHistory() {
   if (arr.length > 0) {
     const scoreVals = arr.map(r => r.score);
     const accVals = arr.map(r => r.acc);
-    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5) });
-    drawLineChart(accCanvas,  accVals,  '#10b981', { fixedMin: 0, fixedMax: 100, overlay: rollingAverage(accVals, 5) });
+    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5), history: arr, tooltipSuffix: lower ? 's' : '' });
+    drawLineChart(accCanvas,  accVals,  '#10b981', { overlay: rollingAverage(accVals, 5), history: arr, tooltipSuffix: '%', minRange: 5, clampMin: 0, clampMax: 100 });
     const lastS = scoreVals[scoreVals.length - 1];
     $('hist-score-latest').textContent = lower ? lastS.toFixed(2) + 's' : lastS;
     $('hist-acc-latest').textContent = (accVals[accVals.length - 1] || 0) + '%';
