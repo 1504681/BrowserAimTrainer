@@ -1481,10 +1481,15 @@ let pursuerFill = 0;       // 0..1
 let pursuerMul = 1;
 let pursuerCurrentDur = 2.5;
 
-// Reactivity tracking — measures ms between bar flip and player input matching new direction
+// Reactivity tracking — measures ms between cylinder bot's direction flip
+// and player's mouse movement flipping to follow it (true aim reactivity).
 let pursuerReactStart = 0;
 let pursuerReactWaiting = false;
+let pursuerReactFromSign = 0;     // mouse sign at the moment of bot flip
 let pursuerReactSamples = [];
+let mouseXSmooth = 0;              // exponentially smoothed movementX
+const MOUSE_SMOOTH_ALPHA = 0.35;
+const MOUSE_SIGN_THRESH = 0.6;     // ignore tiny jitter
 
 // Camera rotation
 let yaw = 0;
@@ -1928,6 +1933,15 @@ function updateCylinders(dt) {
     if (e.strafeTimer <= 0) {
       e.strafeDir *= -1;
       e.strafeTimer = (0.6 + Math.random() * 1.0) * (1 / Math.max(0.5, diff.speedMul));
+      // Reactivity sample: only count if player was meaningfully tracking pre-flip
+      const preSign = Math.abs(mouseXSmooth) > MOUSE_SIGN_THRESH ? Math.sign(mouseXSmooth) : 0;
+      if (preSign !== 0) {
+        pursuerReactStart = performance.now();
+        pursuerReactWaiting = true;
+        pursuerReactFromSign = preSign;
+      } else {
+        pursuerReactWaiting = false;
+      }
     }
 
     const ux = dx / dist, uz = dz / dist;
@@ -2127,6 +2141,18 @@ document.addEventListener('mousemove', (e) => {
   pitch -= e.movementY * radPerCount;
   if (pitch >  PITCH_LIMIT) pitch =  PITCH_LIMIT;
   if (pitch < -PITCH_LIMIT) pitch = -PITCH_LIMIT;
+
+  // Smooth movementX for reactivity tracking
+  mouseXSmooth = mouseXSmooth * (1 - MOUSE_SMOOTH_ALPHA) + e.movementX * MOUSE_SMOOTH_ALPHA;
+
+  if (pursuerReactWaiting && gameActive && mode === 'cylinder') {
+    const sign = Math.abs(mouseXSmooth) > MOUSE_SIGN_THRESH ? Math.sign(mouseXSmooth) : 0;
+    if (sign !== 0 && sign !== pursuerReactFromSign) {
+      const elapsed = performance.now() - pursuerReactStart;
+      if (elapsed >= 30 && elapsed <= 1500) pursuerReactSamples.push(elapsed);
+      pursuerReactWaiting = false;
+    }
+  }
 });
 
 // Click handling
@@ -2654,9 +2680,6 @@ function animate(now) {
       pursuerFill = 0;
       pursuerDir = (pursuerDir === 'left') ? 'right' : 'left';
       pursuerCurrentDur = pickPursuerDuration();
-      // Begin a reactivity sample
-      pursuerReactStart = now;
-      pursuerReactWaiting = true;
       playFlipBeep();
     }
     dirBarFill.style.width = (pursuerFill * 100) + '%';
@@ -2667,14 +2690,6 @@ function animate(now) {
     pursuerMul = correct ? 2 : (left || right ? 1 : 0.5);
     dirBar.classList.toggle('correct', correct);
     dirBar.classList.toggle('wrong', !correct && (left || right));
-
-    // Record reactivity once player matches the new direction
-    if (pursuerReactWaiting && correct) {
-      const elapsed = now - pursuerReactStart;
-      // Cap to avoid recording absurd values when player simply doesn't react
-      if (elapsed < 3000) pursuerReactSamples.push(elapsed);
-      pursuerReactWaiting = false;
-    }
   }
 
   // Dodge bar update
