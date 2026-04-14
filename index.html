@@ -1351,6 +1351,11 @@
   .sd-cell.track { border-left: 3px solid var(--accent); }
   .sd-cell.empty .val { color: var(--text-dim); font-weight: 500; }
 
+  /* Highlighted play button reflecting the active weapon */
+  #sd-play-click.selected, #sd-play-track.selected {
+    box-shadow: 0 0 24px rgba(6,182,212,0.45), 0 0 0 2px var(--accent);
+  }
+
   /* Make the scenario-info area visibly clickable */
   .scenario-card { cursor: pointer; }
   .scenario-card .scenario-buttons { cursor: default; }
@@ -1832,6 +1837,10 @@
     Pick the game whose sensitivity you want to match, enter your in-game value, and we'll convert it.
   </p>
   <div class="fr-grid">
+    <label class="fr-field" style="grid-column: 1 / -1;">
+      <span class="fr-lbl">Player Name</span>
+      <input id="fr-name" type="text" maxlength="20" placeholder="Anon" autocomplete="off">
+    </label>
     <label class="fr-field">
       <span class="fr-lbl">Mouse DPI</span>
       <input id="fr-dpi" type="number" min="100" step="50" value="1000">
@@ -1908,8 +1917,8 @@
     </details>
 
     <div class="row" style="margin-top: 18px;">
-      <button class="btn primary" id="sd-play-click">▶ Play Click</button>
-      <button class="btn success" id="sd-play-track">▶ Play Track</button>
+      <button class="btn primary" id="sd-play-click">▶ Play Click-Timing</button>
+      <button class="btn success" id="sd-play-track">▶ Play Tracking</button>
       <button class="btn muted" id="sd-back">Back</button>
     </div>
   </div>
@@ -2019,6 +2028,7 @@ const DEFAULT_SETTINGS = {
   trackingCount: 4,
   weapon: 'hitscan',
   hudInset: 16,
+  playerName: '',
   // Per-scenario custom multipliers (size, speed, dirChange) + enabled flag
   customScenarios: {
     bouncing: { size: 1, speed: 1, dir: 1, enabled: false },
@@ -2055,6 +2065,61 @@ function deepMerge(target, src) {
   }
 }
 loadSettings();
+
+// ============================================================================
+// Remote leaderboard backend (Cloudflare Worker)
+// Set this to your deployed Worker URL (e.g. https://browser-aim-trainer-leaderboard.<your>.workers.dev)
+// Leave empty to disable remote leaderboards (local only).
+// ============================================================================
+const LEADERBOARD_URL = '';
+const remoteScores = Object.create(null); // { fullKey: [ { name, score, acc, ... } ] }
+const REMOTE_KEYS = []; // populated below with all (mode, diff, weapon) combos
+
+function buildRemoteKeys() {
+  const modes = ['bouncing', 'cylinder', 'dodge', 'pole'];
+  const diffs = ['easy', 'normal', 'hard', 'custom'];
+  const weapons = ['hitscan', 'tracking'];
+  for (const m of modes) for (const d of diffs) for (const w of weapons) {
+    if (m === 'pole' && w === 'hitscan') continue; // pole is tracking-only
+    REMOTE_KEYS.push(`${m}-${d}-${w}`);
+  }
+}
+buildRemoteKeys();
+
+async function fetchRemoteScores(key) {
+  if (!LEADERBOARD_URL) return null;
+  try {
+    const resp = await fetch(`${LEADERBOARD_URL}/scores?key=${encodeURIComponent(key)}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (Array.isArray(data.scores)) {
+      remoteScores[key] = data.scores;
+      return data.scores;
+    }
+  } catch (e) {}
+  return null;
+}
+
+async function fetchAllRemoteScores() {
+  if (!LEADERBOARD_URL) return;
+  // Fire all in parallel; ignore failures
+  await Promise.all(REMOTE_KEYS.map(k => fetchRemoteScores(k)));
+}
+
+async function submitRemoteScore(key, payload) {
+  if (!LEADERBOARD_URL) return null;
+  try {
+    const resp = await fetch(`${LEADERBOARD_URL}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, ...payload }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (Array.isArray(data.scores)) remoteScores[key] = data.scores;
+    return data;
+  } catch (e) { return null; }
+}
 
 // ============================================================================
 // Run history (last N runs per mode-difficulty)
@@ -3670,8 +3735,17 @@ function refreshLeaderboard(modeKey, fullKey, lower) {
   const niceDiff = diff.charAt(0).toUpperCase() + diff.slice(1);
   $('lb-sub').textContent = `${niceDiff} · ${wpn}`;
 
-  const arr = getRunHistory(fullKey).slice();
-  // Sort: best first (lower-is-better for time, otherwise higher)
+  // Prefer remote scores when available, else fall back to local run history
+  const remote = remoteScores[fullKey];
+  let arr;
+  if (remote && remote.length > 0) {
+    arr = remote.slice();
+  } else {
+    arr = getRunHistory(fullKey).slice().map(r => ({
+      name: Settings.playerName || 'You',
+      score: r.score, acc: r.acc, ts: r.ts
+    }));
+  }
   arr.sort((a, b) => lower ? (a.score - b.score) : (b.score - a.score));
 
   const rowsEl = $('lb-rows');
@@ -3684,23 +3758,27 @@ function refreshLeaderboard(modeKey, fullKey, lower) {
     return;
   }
 
-  // Find the latest run by ts to flag "you" highlighting (not strictly needed but keeps groundwork for multi-user)
-  let latestTs = 0;
-  for (const r of arr) if (r.ts > latestTs) latestTs = r.ts;
+  // Highlight latest entry from this player (if present in the data)
+  const myName = Settings.playerName || '';
+  let latestMyTs = 0;
+  for (const r of arr) {
+    if ((r.name === myName || !remote) && r.ts > latestMyTs) latestMyTs = r.ts;
+  }
 
   arr.slice(0, 12).forEach((r, i) => {
     const row = document.createElement('div');
     row.className = 'lb-row';
-    if (r.ts === latestTs) row.classList.add('you');
+    if (r.ts === latestMyTs && (r.name === myName || !remote)) row.classList.add('you');
     const rank = i + 1;
     let rankClass = '';
     if (rank === 1) rankClass = 'gold';
     else if (rank === 2) rankClass = 'silver';
     else if (rank === 3) rankClass = 'bronze';
     const scoreText = lower ? r.score.toFixed(2) + 's' : r.score;
+    const nameText = r.name || 'Anon';
     row.innerHTML =
       `<div class="lb-rank ${rankClass}">${rank}</div>` +
-      `<div class="lb-score">${scoreText}</div>` +
+      `<div class="lb-score">${nameText} · ${scoreText}</div>` +
       `<div class="lb-acc">${r.acc != null ? r.acc + '%' : ''}</div>`;
     rowsEl.appendChild(row);
   });
@@ -4484,6 +4562,13 @@ function gameOver(won) {
     lastHistoryKey = fullKey;
     refreshLeaderboard(bestKey, fullKey, lower);
     showLeaderboard();
+    // Submit to remote leaderboard (best effort) and re-render when it returns
+    if (LEADERBOARD_URL && bestVal > 0) {
+      submitRemoteScore(fullKey, {
+        name: Settings.playerName || 'Anon',
+        score: bestVal, acc, hits: shotsHit, headshots, mul: avgMul,
+      }).then(() => refreshLeaderboard(bestKey, fullKey, lower));
+    }
     // Scoreboard label so player knows which highscore table this run is on
     const sbLabel = $('scoreboard-label');
     const niceMode  = bestKey.charAt(0).toUpperCase() + bestKey.slice(1);
@@ -4771,16 +4856,60 @@ const SCENARIO_INFO = {
 const sdScreen = $('scenario-detail');
 let sdMode = null;
 
-function openScenarioDetail(modeKey) {
+function renderScenarioBests(modeKey) {
+  const bestsEl = $('sd-bests');
+  if (!bestsEl) return;
+  bestsEl.innerHTML = '';
+  const isPoleOnly = (modeKey === 'pole');
+  const weapons = isPoleOnly ? ['tracking'] : ['hitscan', 'tracking'];
+  for (const wpn of weapons) {
+    for (const diff of ['easy', 'normal', 'hard']) {
+      const key = modeKey + '-' + diff + '-' + wpn;
+      // Prefer remote top score if we have it, else local best
+      let best = null;
+      const remote = remoteScores[key];
+      if (remote && remote.length > 0) {
+        best = remote[0].score;
+      } else {
+        const stored = localStorage.getItem('best2_' + key);
+        best = stored ? parseFloat(stored) : null;
+      }
+      const cell = document.createElement('div');
+      cell.className = 'sd-cell ' + (wpn === 'tracking' ? 'track' : 'click') + (best === null ? ' empty' : '');
+      const wpnLabel = wpn === 'tracking' ? 'Track' : 'Click';
+      const diffLabel = diff.charAt(0).toUpperCase() + diff.slice(1);
+      cell.innerHTML = `<div class="lbl">${diffLabel} · ${wpnLabel}</div><div class="val">${best !== null ? (Number.isInteger(best) ? best : best.toFixed(2)) : '—'}</div>`;
+      bestsEl.appendChild(cell);
+    }
+  }
+}
+
+async function openScenarioDetail(modeKey) {
   const info = SCENARIO_INFO[modeKey];
   if (!info) return;
   sdMode = modeKey;
   $('sd-title').textContent = info.title;
   $('sd-desc').textContent = info.description;
 
+  // Refresh remote leaderboards for all (difficulty, weapon) combos of this scenario
+  if (LEADERBOARD_URL) {
+    const diffs = ['easy', 'normal', 'hard', 'custom'];
+    const weapons = (modeKey === 'pole') ? ['tracking'] : ['hitscan', 'tracking'];
+    Promise.all(
+      diffs.flatMap(d => weapons.map(w => fetchRemoteScores(`${modeKey}-${d}-${w}`)))
+    ).then(() => {
+      // Re-render bests grid with fresh data if still on this scenario
+      if (sdMode === modeKey) renderScenarioBests(modeKey);
+    });
+  }
+
   // Pole Practice is tracking-only — hide the Click play button + click bests cells
   const isPoleOnly = (modeKey === 'pole');
   $('sd-play-click').style.display = isPoleOnly ? 'none' : '';
+
+  // Highlight the play button matching the current weapon
+  $('sd-play-click').classList.toggle('selected', Settings.weapon === 'hitscan' && !isPoleOnly);
+  $('sd-play-track').classList.toggle('selected', Settings.weapon === 'tracking' || isPoleOnly);
 
   // Sync customize UI from saved per-scenario settings
   const cfg = Settings.customScenarios[modeKey] || { size: 1, speed: 1, dir: 1, enabled: false };
@@ -4793,23 +4922,7 @@ function openScenarioDetail(modeKey) {
   $('sd-cust-enable').checked = !!cfg.enabled;
   if (cfg.enabled) $('sd-customize').setAttribute('open', '');
 
-  // Populate the bests grid (3 difficulties × 2 weapons; pole is tracking-only)
-  const bestsEl = $('sd-bests');
-  bestsEl.innerHTML = '';
-  const weapons = isPoleOnly ? ['tracking'] : ['hitscan', 'tracking'];
-  for (const wpn of weapons) {
-    for (const diff of ['easy', 'normal', 'hard']) {
-      const key = modeKey + '-' + diff + '-' + wpn;
-      const stored = localStorage.getItem('best2_' + key);
-      const v = stored ? parseFloat(stored) : null;
-      const cell = document.createElement('div');
-      cell.className = 'sd-cell ' + (wpn === 'tracking' ? 'track' : 'click') + (v === null ? ' empty' : '');
-      const wpnLabel = wpn === 'tracking' ? 'Track' : 'Click';
-      const diffLabel = diff.charAt(0).toUpperCase() + diff.slice(1);
-      cell.innerHTML = `<div class="lbl">${diffLabel} · ${wpnLabel}</div><div class="val">${v !== null ? (Number.isInteger(v) ? v : v.toFixed(2)) : '—'}</div>`;
-      bestsEl.appendChild(cell);
-    }
-  }
+  renderScenarioBests(modeKey);
 
   // Chart of the current (difficulty, weapon) selection
   const currentKey = modeKey + '-' + Settings.difficulty + '-' + Settings.weapon;
@@ -5092,10 +5205,13 @@ frGame.addEventListener('change', () => {
 frDpi.addEventListener('input', recomputeFirstRun);
 frSens.addEventListener('input', recomputeFirstRun);
 
+const frName = $('fr-name');
+
 function showFirstRun() {
   // Default to a sensible starting point
   if (!frDpi.value) frDpi.value = 1000;
   if (!frSens.value) frSens.value = getSelectedPreset().defaultSens;
+  if (Settings.playerName) frName.value = Settings.playerName;
   recomputeFirstRun();
   showOnly(firstRunScreen);
 }
@@ -5106,6 +5222,10 @@ $('first-run-save').onclick = () => {
     setInches(v);
     calInput.value = v.toFixed(4);
   }
+  // Save player name (default Anon if empty)
+  const name = (frName.value || '').trim().slice(0, 20) || 'Anon';
+  Settings.playerName = name;
+  saveSettings();
   localStorage.setItem('first_run_done', '1');
   showMainMenu();
 };
@@ -5141,6 +5261,9 @@ try {
 if (!localStorage.getItem('first_run_done')) {
   showFirstRun();
 }
+
+// Pre-fetch all remote leaderboards (best effort)
+fetchAllRemoteScores();
 </script>
 </body>
 </html>

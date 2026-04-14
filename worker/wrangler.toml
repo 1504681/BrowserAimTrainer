@@ -1,0 +1,8 @@
+name = "browser-aim-trainer-leaderboard"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+# KV namespace already provisioned for the trainer leaderboard.
+[[kv_namespaces]]
+binding = "SCORES"
+id = "45dba94c8a4245f1a42a2b8d40e6e429"
