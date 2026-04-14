@@ -246,6 +246,53 @@
     margin-left: 6px;
     vertical-align: middle;
   }
+
+  /* Fullscreen button */
+  #btn-fullscreen {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    z-index: 6;
+  }
+  #btn-fullscreen:hover { background: rgba(255,255,255,0.15); }
+
+  /* Headshot toast */
+  #hs-toast {
+    position: fixed;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    color: #ffeb3b;
+    font-size: 2.4rem;
+    font-weight: 800;
+    text-shadow: 0 0 12px rgba(255,235,59,0.7), 0 2px 4px rgba(0,0,0,0.9);
+    pointer-events: none;
+    z-index: 6;
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    letter-spacing: 2px;
+  }
+  #hs-toast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  #menu .menu-keys {
+    margin-top: 10px;
+    font-size: 0.75rem;
+    opacity: 0.5;
+    letter-spacing: 1px;
+  }
+
+  #btn-tracking { background: #16a085; color: #fff; }
 </style>
 
 <script type="importmap">
@@ -261,7 +308,12 @@
 <div id="hud" class="hide">
   <span id="score-display">Score: 0</span>
   <span id="timer-display" style="display:none;">Time: 0.00</span>
+  <span id="acc-display">Acc: 0%</span>
 </div>
+
+<button id="btn-fullscreen" title="Fullscreen (F)">⛶</button>
+
+<div id="hs-toast"></div>
 
 <div id="menu">
   <h1>Don't Tap the White Tile<span class="badge">FPS</span></h1>
@@ -272,9 +324,11 @@
     <button id="cal-start" type="button">calibrate</button>
     <div class="cal-hint">Browser pointer lock loses raw counts to OS pointer settings — calibrate or tweak the value above.</div>
   </div>
-  <button id="btn-classic">Classic<br><span class="mode-desc">Shoot 50 black tiles as fast as you can</span></button>
+  <button id="btn-classic">Classic<br><span class="mode-desc">Shoot 50 white targets as fast as you can</span></button>
   <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive 60 seconds — don't shoot the wrong tile</span></button>
   <button id="btn-zen">Zen<br><span class="mode-desc">No timer — just shoot</span></button>
+  <button id="btn-tracking">Tracking<br><span class="mode-desc">Moving targets · headshots count double · 60s</span></button>
+  <div class="menu-keys">F Fullscreen · R Restart · ESC Pause</div>
 </div>
 
 <div id="lock-prompt">
@@ -322,6 +376,43 @@ function setInches(v) {
   localStorage.setItem('cal_in360', String(v));
 }
 
+// ===== Audio (Web Audio synth — no external files) =====
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function playPop(pitch = 1, volume = 0.18) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(900 * pitch, t);
+  o.frequency.exponentialRampToValueAtTime(120 * pitch, t + 0.07);
+  g.gain.setValueAtTime(volume, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t);
+  o.stop(t + 0.09);
+}
+function playMiss() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(60, t + 0.1);
+  g.gain.setValueAtTime(0.08, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t);
+  o.stop(t + 0.13);
+}
+
 // ===== Game state =====
 let blackTiles = new Set();
 let score = 0;
@@ -330,6 +421,11 @@ let gameActive = false;
 let timerInterval = null;
 let startTime = 0;
 let timeLeft = 0;
+
+// Stats (accuracy)
+let shotsFired = 0;
+let shotsHit = 0;
+let headshots = 0;
 
 let yaw = 0;
 let pitch = 0;
@@ -343,6 +439,9 @@ const crosshair = document.getElementById('crosshair');
 const lockPrompt = document.getElementById('lock-prompt');
 const scoreDisplay = document.getElementById('score-display');
 const timerDisplay = document.getElementById('timer-display');
+const accDisplay = document.getElementById('acc-display');
+const hsToast = document.getElementById('hs-toast');
+const fsButton = document.getElementById('btn-fullscreen');
 const overlay = document.getElementById('overlay');
 const overTitle = document.getElementById('over-title');
 const overScore = document.getElementById('over-score');
@@ -406,12 +505,14 @@ const tileAnim = Array.from({ length: GRID_SIZE }, () => ({
 const tileGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, 0.18);
 const edgeGeo = new THREE.EdgesGeometry(tileGeo);
 
-const COLOR_INACTIVE = new THREE.Color(0x0a0a0a);
-const COLOR_ACTIVE   = new THREE.Color(0x1a1a1a);
-const COLOR_GREEN    = new THREE.Color(0x2ecc71);
-const COLOR_RED      = new THREE.Color(0xe74c3c);
-const EDGE_DIM       = new THREE.Color(0x222222);
-const EDGE_BRIGHT    = new THREE.Color(0xcccccc);
+const COLOR_INACTIVE  = new THREE.Color(0x0a0a0a);
+const COLOR_ACTIVE    = new THREE.Color(0xf2f2f2);
+const EMISSIVE_ACTIVE = new THREE.Color(0x999999);
+const EMISSIVE_DARK   = new THREE.Color(0x000000);
+const COLOR_GREEN     = new THREE.Color(0x2ecc71);
+const COLOR_RED       = new THREE.Color(0xe74c3c);
+const EDGE_DIM        = new THREE.Color(0x222222);
+const EDGE_BRIGHT     = new THREE.Color(0xffffff);
 
 for (let i = 0; i < GRID_SIZE; i++) {
   const row = Math.floor(i / 4);
@@ -421,8 +522,10 @@ for (let i = 0; i < GRID_SIZE; i++) {
 
   const mat = new THREE.MeshStandardMaterial({
     color: COLOR_INACTIVE,
-    metalness: 0.15,
-    roughness: 0.6
+    emissive: EMISSIVE_DARK,
+    emissiveIntensity: 1.0,
+    metalness: 0.1,
+    roughness: 0.5
   });
   const mesh = new THREE.Mesh(tileGeo, mat);
   mesh.position.set(x, y, PANEL_Z);
@@ -436,6 +539,102 @@ for (let i = 0; i < GRID_SIZE; i++) {
   const edges = new THREE.LineSegments(edgeGeo, edgeMat);
   mesh.add(edges);
   tileEdges.push(edgeMat);
+}
+
+// ===== Tracking-mode enemies (moving body+head targets) =====
+const PANEL_HALF_W = 5.5;
+const PANEL_TOP    = PANEL_Y + 2.6;
+const PANEL_BOTTOM = PANEL_Y - 2.6;
+const ENEMY_BODY_SIZE = 0.85;
+const ENEMY_HEAD_SIZE = 0.42;
+const ENEMY_Z = PANEL_Z + 0.45;
+const TRACKING_TARGET_COUNT = 4;
+const TRACKING_DURATION = 60;
+
+const enemyBodyGeo = new THREE.BoxGeometry(ENEMY_BODY_SIZE, ENEMY_BODY_SIZE, 0.3);
+const enemyHeadGeo = new THREE.BoxGeometry(ENEMY_HEAD_SIZE, ENEMY_HEAD_SIZE, 0.3);
+const enemyEdgeBodyGeo = new THREE.EdgesGeometry(enemyBodyGeo);
+const enemyEdgeHeadGeo = new THREE.EdgesGeometry(enemyHeadGeo);
+
+const enemies = [];
+
+function makeEnemy() {
+  const group = new THREE.Group();
+
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0xf2f2f2,
+    emissive: 0x666666,
+    emissiveIntensity: 1.0,
+    metalness: 0.1,
+    roughness: 0.5
+  });
+  const body = new THREE.Mesh(enemyBodyGeo, bodyMat);
+  body.castShadow = true;
+  body.userData.part = 'body';
+  group.add(body);
+  body.add(new THREE.LineSegments(enemyEdgeBodyGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: 0xff6b6b,
+    emissive: 0xaa3030,
+    emissiveIntensity: 1.0,
+    metalness: 0.1,
+    roughness: 0.5
+  });
+  const head = new THREE.Mesh(enemyHeadGeo, headMat);
+  head.position.y = (ENEMY_BODY_SIZE + ENEMY_HEAD_SIZE) / 2 + 0.04;
+  head.castShadow = true;
+  head.userData.part = 'head';
+  group.add(head);
+  head.add(new THREE.LineSegments(enemyEdgeHeadGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  // Random spawn
+  const e = {
+    group, body, head, bodyMat, headMat,
+    vx: (Math.random() - 0.5) * 4.0,
+    vy: (Math.random() - 0.5) * 2.4,
+    hp: 2,
+    flashUntil: 0
+  };
+  resetEnemyPosition(e);
+  scene.add(group);
+  enemies.push(e);
+  return e;
+}
+
+function resetEnemyPosition(e) {
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
+  const halfH = ((PANEL_TOP - PANEL_BOTTOM) - ENEMY_BODY_SIZE - ENEMY_HEAD_SIZE) / 2;
+  e.group.position.set(
+    (Math.random() * 2 - 1) * halfW,
+    PANEL_Y - ENEMY_HEAD_SIZE / 2 + (Math.random() * 2 - 1) * halfH,
+    ENEMY_Z
+  );
+  // Re-randomize velocity each spawn to keep things fresh
+  const speed = 2.4 + Math.random() * 2.0;
+  const angle = Math.random() * Math.PI * 2;
+  e.vx = Math.cos(angle) * speed;
+  e.vy = Math.sin(angle) * speed * 0.55;
+  e.hp = 2;
+}
+
+function updateEnemies(dt) {
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
+  const lowerY = PANEL_BOTTOM + ENEMY_BODY_SIZE / 2 + 0.1;
+  const upperY = PANEL_TOP - ENEMY_HEAD_SIZE - ENEMY_BODY_SIZE / 2 - 0.1;
+  for (const e of enemies) {
+    e.group.position.x += e.vx * dt;
+    e.group.position.y += e.vy * dt;
+    if (e.group.position.x >  halfW) { e.group.position.x =  halfW; e.vx = -e.vx; }
+    if (e.group.position.x < -halfW) { e.group.position.x = -halfW; e.vx = -e.vx; }
+    if (e.group.position.y > upperY) { e.group.position.y = upperY; e.vy = -e.vy; }
+    if (e.group.position.y < lowerY) { e.group.position.y = lowerY; e.vy = -e.vy; }
+  }
+}
+
+function clearEnemies() {
+  for (const e of enemies) scene.remove(e.group);
+  enemies.length = 0;
 }
 
 // ===== Resize =====
@@ -497,11 +696,66 @@ lockPrompt.addEventListener('mousedown', onClick);
 const raycaster = new THREE.Raycaster();
 const forward = new THREE.Vector3();
 function shoot() {
+  shotsFired++;
   camera.getWorldDirection(forward);
   raycaster.set(camera.position, forward);
+
+  if (mode === 'tracking') {
+    // Raycast all enemy parts
+    const parts = [];
+    for (const e of enemies) {
+      parts.push(e.body, e.head);
+    }
+    const hits = raycaster.intersectObjects(parts, false);
+    if (hits.length > 0) {
+      const hitObj = hits[0].object;
+      const enemy = enemies.find(en => en.body === hitObj || en.head === hitObj);
+      if (enemy) handleEnemyHit(enemy, hitObj.userData.part);
+    } else {
+      playMiss();
+    }
+    updateAccuracy();
+    return;
+  }
+
+  // Default tile-based modes
   const hits = raycaster.intersectObjects(tileMeshes, false);
   if (hits.length > 0) {
     handleTap(hits[0].object.userData.index);
+  } else {
+    playMiss();
+  }
+  updateAccuracy();
+}
+
+function updateAccuracy() {
+  const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+  accDisplay.textContent = 'Acc: ' + acc + '%';
+}
+
+function showHsToast() {
+  hsToast.textContent = 'HEADSHOT';
+  hsToast.classList.add('show');
+  clearTimeout(showHsToast._t);
+  showHsToast._t = setTimeout(() => hsToast.classList.remove('show'), 350);
+}
+
+function handleEnemyHit(enemy, part) {
+  shotsHit++;
+  const isHead = part === 'head';
+  const dmg = isHead ? 2 : 1;
+  enemy.hp -= dmg;
+  enemy.flashUntil = performance.now() + 90;
+
+  if (enemy.hp <= 0) {
+    score += isHead ? 2 : 1;
+    if (isHead) headshots++;
+    scoreDisplay.textContent = 'Score: ' + score;
+    playPop(isHead ? 1.6 : 1.0, isHead ? 0.22 : 0.18);
+    if (isHead) showHsToast();
+    resetEnemyPosition(enemy);
+  } else {
+    playPop(0.7, 0.12);
   }
 }
 
@@ -515,6 +769,21 @@ function animate(now) {
   camera.rotation.order = 'YXZ';
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
+
+  // Enemy update + flash decay
+  if (mode === 'tracking' && gameActive) {
+    updateEnemies(dt);
+  }
+  for (const e of enemies) {
+    const flashing = now < e.flashUntil;
+    if (flashing) {
+      e.bodyMat.emissive.setRGB(1, 0.3, 0.3);
+      e.headMat.emissive.setRGB(1, 0.3, 0.3);
+    } else {
+      e.bodyMat.emissive.setRGB(0.4, 0.4, 0.4);
+      e.headMat.emissive.setRGB(0.66, 0.18, 0.18);
+    }
+  }
 
   // Tile animations
   for (let i = 0; i < GRID_SIZE; i++) {
@@ -532,9 +801,11 @@ function animate(now) {
     const flashing = now < anim.flashUntil;
     if (flashing) {
       mesh.material.color.copy(anim.flashColor);
+      mesh.material.emissive.copy(anim.flashColor);
       tileEdges[i].color.copy(anim.flashColor);
     } else {
       mesh.material.color.copy(isBlack ? COLOR_ACTIVE : COLOR_INACTIVE);
+      mesh.material.emissive.copy(isBlack ? EMISSIVE_ACTIVE : EMISSIVE_DARK);
       tileEdges[i].color.copy(isBlack ? EDGE_BRIGHT : EDGE_DIM);
     }
   }
@@ -548,8 +819,19 @@ requestAnimationFrame(animate);
 document.getElementById('btn-classic').onclick   = () => startGame('classic');
 document.getElementById('btn-endurance').onclick = () => startGame('endurance');
 document.getElementById('btn-zen').onclick       = () => startGame('zen');
+document.getElementById('btn-tracking').onclick  = () => startGame('tracking');
 document.getElementById('btn-retry').onclick     = () => startGame(mode);
 document.getElementById('btn-menu').onclick      = showMenu;
+
+// Fullscreen toggle
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+}
+fsButton.onclick = toggleFullscreen;
 
 // Calibration input
 const calInput = document.getElementById('cal-input');
@@ -596,12 +878,21 @@ function finishCalibration(save) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (!calibrating) return;
-  if (e.code === 'Space') {
+  if (calibrating) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      finishCalibration(true);
+    } else if (e.code === 'Escape') {
+      finishCalibration(false);
+    }
+    return;
+  }
+  if (e.code === 'KeyF') {
     e.preventDefault();
-    finishCalibration(true);
-  } else if (e.code === 'Escape') {
-    finishCalibration(false);
+    toggleFullscreen();
+  } else if (e.code === 'KeyR' && mode) {
+    e.preventDefault();
+    startGame(mode);
   }
 });
 
@@ -614,21 +905,30 @@ function showMenu() {
   stopTimer();
   gameActive = false;
   blackTiles.clear();
+  clearEnemies();
+  mode = '';
   if (document.exitPointerLock) document.exitPointerLock();
 }
 
 function startGame(m) {
+  ensureAudio();
   mode = m;
   score = 0;
+  shotsFired = 0;
+  shotsHit = 0;
+  headshots = 0;
   gameActive = true;
   yaw = 0;
-  pitch = 0;
+  // Aim camera at panel center on game start (panel is above eye level)
+  pitch = Math.atan((PANEL_Y - camera.position.y) / -PANEL_Z);
   overlay.classList.remove('show');
   menu.style.display = 'none';
   hud.classList.remove('hide');
   crosshair.classList.add('show');
   scoreDisplay.textContent = 'Score: 0';
+  updateAccuracy();
   stopTimer();
+  clearEnemies();
 
   if (mode === 'classic') {
     timerDisplay.style.display = 'inline';
@@ -640,6 +940,12 @@ function startGame(m) {
     timerDisplay.textContent = 'Time: ' + ENDURANCE_TIME.toFixed(1);
     startTime = Date.now();
     timerInterval = setInterval(updateEnduranceTimer, 50);
+  } else if (mode === 'tracking') {
+    timerDisplay.style.display = 'inline';
+    timeLeft = TRACKING_DURATION;
+    timerDisplay.textContent = 'Time: ' + TRACKING_DURATION.toFixed(1);
+    startTime = Date.now();
+    timerInterval = setInterval(updateTrackingTimer, 50);
   } else {
     timerDisplay.style.display = 'none';
   }
@@ -649,7 +955,15 @@ function startGame(m) {
     tileAnim[i].press = 0;
     tileAnim[i].flashUntil = 0;
   }
-  placeBlackTiles(NUM_BLACK);
+
+  if (mode === 'tracking') {
+    // Hide the static tile grid behind the targets for clarity
+    for (const t of tileMeshes) t.visible = false;
+    for (let i = 0; i < TRACKING_TARGET_COUNT; i++) makeEnemy();
+  } else {
+    for (const t of tileMeshes) t.visible = true;
+    placeBlackTiles(NUM_BLACK);
+  }
 
   // Auto-request pointer lock on game start
   requestLock();
@@ -676,12 +990,14 @@ function handleTap(index) {
   if (!gameActive) return;
 
   if (blackTiles.has(index)) {
+    shotsHit++;
     score++;
     scoreDisplay.textContent = 'Score: ' + score;
     blackTiles.delete(index);
     tileAnim[index].press = 0.18;
     flash(index, COLOR_GREEN);
     placeBlackTiles(1, index);
+    playPop(1.0, 0.18);
 
     if (mode === 'classic' && score >= CLASSIC_TARGET) {
       gameOver(true);
@@ -689,6 +1005,7 @@ function handleTap(index) {
   } else {
     flash(index, COLOR_RED);
     tileAnim[index].press = 0.12;
+    playMiss();
     gameOver(false);
   }
 }
@@ -701,6 +1018,18 @@ function updateClassicTimer() {
 function updateEnduranceTimer() {
   const elapsed = (Date.now() - startTime) / 1000;
   timeLeft = ENDURANCE_TIME - elapsed;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    timerDisplay.textContent = 'Time: 0.0';
+    gameOver(true);
+    return;
+  }
+  timerDisplay.textContent = 'Time: ' + timeLeft.toFixed(1);
+}
+
+function updateTrackingTimer() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  timeLeft = TRACKING_DURATION - elapsed;
   if (timeLeft <= 0) {
     timeLeft = 0;
     timerDisplay.textContent = 'Time: 0.0';
@@ -725,31 +1054,38 @@ function gameOver(won) {
   hud.classList.add('hide');
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+  const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+  const accLine = `Accuracy: ${acc}% (${shotsHit}/${shotsFired})`;
 
   if (mode === 'classic' && won) {
     overTitle.textContent = 'Complete!';
     overScore.textContent = CLASSIC_TARGET + ' tiles in ' + elapsed + 's';
-    overTime.textContent = '';
+    overTime.textContent = accLine;
     updateBest('classic-fps', parseFloat(elapsed), true);
   } else if (mode === 'endurance' && won) {
     overTitle.textContent = 'You Survived!';
     overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'You lasted the full 60 seconds!';
+    overTime.textContent = accLine;
     updateBest('endurance-fps', score, false);
   } else if (mode === 'endurance') {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'Survived: ' + elapsed + 's';
+    overTime.textContent = `Survived ${elapsed}s · ${accLine}`;
     updateBest('endurance-fps', score, false);
   } else if (mode === 'zen') {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
-    overTime.textContent = '';
+    overTime.textContent = accLine;
     updateBest('zen-fps', score, false);
+  } else if (mode === 'tracking') {
+    overTitle.textContent = 'Time Up!';
+    overScore.textContent = `Score: ${score} (${headshots} headshots)`;
+    overTime.textContent = accLine;
+    updateBest('tracking-fps', score, false);
   } else {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'Time: ' + elapsed + 's';
+    overTime.textContent = `${elapsed}s · ${accLine}`;
     updateBest('classic-fps-fail', score, false);
   }
 
