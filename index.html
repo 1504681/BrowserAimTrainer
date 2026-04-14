@@ -4111,13 +4111,15 @@ function gameOver(won) {
   overTitle.className = titleClass;
   $('result-headline').textContent = headline;
   $('result-sub').textContent = headSub;
-  // Accuracy band coloring (85-95% gold band)
+  // Accuracy band coloring (85-95% gold band) — click-timing weapon only.
+  // Tracking weapon scores accuracy per fire-tick, which has different semantics, so no band feedback.
   const accEl = $('go-acc');
   accEl.textContent = acc + '%';
   accEl.classList.remove('in-band', 'too-low', 'too-high');
   const accTipEl = $('acc-tip');
   accTipEl.classList.remove('in-band', 'too-low', 'too-high');
-  if (shotsFired === 0) {
+  const isClickWeapon = Settings.weapon === 'hitscan';
+  if (shotsFired === 0 || !isClickWeapon) {
     accTipEl.textContent = '';
   } else if (acc >= 85 && acc <= 95) {
     accEl.classList.add('in-band');
