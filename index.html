@@ -926,6 +926,20 @@
     min-width: 420px;
     max-width: 540px;
   }
+  .scoreboard-label {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: rgba(6,182,212,0.12);
+    border: 1px solid rgba(6,182,212,0.4);
+    padding: 5px 14px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    font-weight: 800;
+    margin-bottom: 14px;
+  }
+
   #overlay h2 {
     font-size: 1.8rem;
     font-weight: 800;
@@ -1516,6 +1530,7 @@
 <!-- Game over overlay -->
 <div id="overlay" class="screen">
   <div class="gameover-card">
+    <div class="scoreboard-label" id="scoreboard-label"></div>
     <h2 id="over-title">Game Over</h2>
     <div class="result-headline" id="result-headline">0</div>
     <div class="result-sub" id="result-sub">Score</div>
@@ -1848,7 +1863,8 @@ const keys = {};
 let dodgeFill = 0;             // 0..1+, can overshoot
 let dodgeDuration = 1.5;       // seconds to reach 1.0 — varies per pattern
 let dodgeMul = 1;
-let dodgePrevStrafeKey = 'none';
+let dodgePrevStrafeKey = 'none';   // last *committed* strafe direction (only updated when active)
+let lastStrafeKeyDown = null;       // tracks the most recently pressed of A/D for counter-strafe
 let dodgeReadyTone = false;
 
 // Pursuer direction-bar state
@@ -2772,6 +2788,11 @@ document.addEventListener('keydown', (e) => {
     else if (e.code === 'Escape') finishCalibration(false);
     return;
   }
+  if (!keys[e.code]) {
+    // First frame the key was pressed — for A/D, remember press order
+    if (e.code === 'KeyA') lastStrafeKeyDown = 'left';
+    else if (e.code === 'KeyD') lastStrafeKeyDown = 'right';
+  }
   keys[e.code] = true;
 
   if (e.code === 'KeyF') { e.preventDefault(); toggleFullscreen(); }
@@ -3298,16 +3319,21 @@ function animate(now) {
 
   // Dodge / Pole / Pursuer bar update — player-driven fill, switching at the green zone earns max points
   if ((mode === 'dodge' || mode === 'pole' || mode === 'cylinder') && gameActive && !gamePaused) {
-    // Bar fill only progresses while the player is actively strafing
-    const strafingNow = !!(keys['KeyA'] || keys['KeyD']);
-    if (strafingNow) dodgeFill += dt / dodgeDuration;
+    // Resolve current strafe direction with counter-strafe support:
+    // if both keys are held, use the most recently pressed one
+    const aHeld = !!keys['KeyA'];
+    const dHeld = !!keys['KeyD'];
+    let strafeKey = 'none';
+    if (aHeld && dHeld) strafeKey = lastStrafeKeyDown || 'left';
+    else if (aHeld) strafeKey = 'left';
+    else if (dHeld) strafeKey = 'right';
 
-    const left  = !!keys['KeyA'] && !keys['KeyD'];
-    const right = !!keys['KeyD'] && !keys['KeyA'];
-    const strafeKey = left ? 'left' : (right ? 'right' : 'none');
+    // Bar fill progresses only while actively strafing
+    if (strafeKey !== 'none') dodgeFill += dt / dodgeDuration;
 
-    if (strafeKey !== dodgePrevStrafeKey && strafeKey !== 'none' && dodgePrevStrafeKey !== 'none') {
-      // Player switched direction — evaluate fill at this moment
+    // Detect a real direction change — compares against the last *committed* direction,
+    // not just the previous frame, so brief releases between A and D still count as a switch
+    if (strafeKey !== 'none' && dodgePrevStrafeKey !== 'none' && strafeKey !== dodgePrevStrafeKey) {
       const f = dodgeFill;
       let earnedMul;
       if (f < 0.10)        earnedMul = 0;
@@ -3318,7 +3344,9 @@ function animate(now) {
       dodgeFill = 0;
       dodgeDuration = pickPursuerDuration();
     }
-    dodgePrevStrafeKey = strafeKey;
+    // Only commit the direction when actively strafing — releasing both keys
+    // doesn't reset the "last direction we saw"
+    if (strafeKey !== 'none') dodgePrevStrafeKey = strafeKey;
 
     // Visual update
     const visualFill = Math.min(1, dodgeFill);
@@ -3482,7 +3510,7 @@ function startGame(m, lockedWeapon = null) {
     backWall.visible = false;
     dodgeRoom.visible = true;
     dodgeBar.classList.add('show');
-    dodgeBar.classList.remove('ready', 'overshoot');
+    dodgeBar.classList.remove('ready', 'overshoot', 'soon');
     pitch = 0;
     const diff = currentDifficulty();
     const targetCount = 6;
@@ -3496,6 +3524,8 @@ function startGame(m, lockedWeapon = null) {
     dodgeDuration = pickPursuerDuration();
     dodgeMul = 1;
     dodgePrevStrafeKey = 'none';
+    lastStrafeKeyDown = null;
+    dodgeReadyTone = false;
   } else if (mode === 'cylinder') {
     for (const t of tileMeshes) t.visible = false;
     backWall.visible = false;
@@ -3587,6 +3617,9 @@ function gameOver(won) {
 
   const elapsed = elapsedSeconds().toFixed(2);
   const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+
+  // Default-hide the scoreboard label; the bestKey branch below re-enables it
+  $('scoreboard-label').style.display = 'none';
 
   // Apply movement multiplier to compute weighted final score
   const avgMul = score > 0 ? (multiplierSum / score) : 1;
@@ -3694,6 +3727,13 @@ function gameOver(won) {
     // Append weapon so click/track have separate tables per scenario+difficulty
     const fullKey = bestKey + '-' + Settings.difficulty + '-' + Settings.weapon;
     lastHistoryKey = fullKey;
+    // Scoreboard label so player knows which highscore table this run is on
+    const sbLabel = $('scoreboard-label');
+    const niceMode  = bestKey.charAt(0).toUpperCase() + bestKey.slice(1);
+    const niceDiff  = Settings.difficulty.charAt(0).toUpperCase() + Settings.difficulty.slice(1);
+    const niceWeapon = Settings.weapon === 'tracking' ? 'Track' : 'Click';
+    sbLabel.textContent = `${niceMode} · ${niceDiff} · ${niceWeapon}`;
+    sbLabel.style.display = 'inline-block';
     lastHistoryLower = lower;
     const stored = localStorage.getItem('best2_' + fullKey);
     const prevBest = stored ? parseFloat(stored) : null;
