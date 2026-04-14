@@ -3,423 +3,3820 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Don't Tap the White Tile</title>
+<title>Aim Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0b10;
+    --surface: #131520;
+    --surface-2: #1c1f2e;
+    --surface-3: #252939;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.18);
+    --text: #f2f4fa;
+    --text-muted: rgba(255,255,255,0.58);
+    --text-dim: rgba(255,255,255,0.32);
+    --accent: #06b6d4;
+    --accent-2: #0891b2;
+    --accent-glow: rgba(6,182,212,0.5);
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --gold: #fbbf24;
+    --r-sm: 6px;
+    --r: 10px;
+    --r-lg: 14px;
+    --shadow: 0 4px 20px rgba(0,0,0,0.5);
+    --shadow-lg: 0 12px 36px rgba(0,0,0,0.6);
+    --t-fast: 0.12s ease;
+    --t: 0.18s ease;
+    --hud-inset: 16px;
+  }
 
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    background: #000;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'tnum';
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #scene-wrap { position: fixed; inset: 0; }
+  #scene-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  /* Crosshair canvas (rendered) */
+  #crosshair {
+    position: fixed; top: 50%; left: 50%;
+    width: 120px; height: 120px;
+    transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 5;
+    display: none;
+  }
+  #crosshair.show { display: block; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: var(--hud-inset); left: 0; right: 0;
+    display: flex; justify-content: center; gap: 10px;
+    z-index: 4; pointer-events: none;
+  }
+  #hud span {
+    background: rgba(10,11,16,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 16px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.2px;
+    box-shadow: var(--shadow);
+  }
+  #hud.hide { display: none; }
+  #hud .label { opacity: 0.55; font-weight: 500; margin-right: 4px; }
+
+  /* Streak indicator */
+  #streak {
+    position: fixed; top: calc(var(--hud-inset) + 54px); right: var(--hud-inset);
+    background: rgba(10,11,16,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 14px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    z-index: 4;
+    display: none;
+    text-align: right;
+    box-shadow: var(--shadow);
+  }
+  #streak.show { display: block; }
+  #streak .label { font-size: 0.65rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 1.5px; display: block; }
+  #streak .value { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+  #streak.hot .value { color: var(--gold); text-shadow: 0 0 20px rgba(251,191,36,0.5); }
+
+  /* FPS counter */
+  #fps-counter {
+    position: fixed; top: var(--hud-inset); left: var(--hud-inset);
+    background: rgba(10,11,16,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 14px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    z-index: 6;
+    color: var(--success);
+    letter-spacing: 0.4px;
+    box-shadow: var(--shadow);
+  }
+  #fps-counter.warn { color: var(--warning); }
+  #fps-counter.bad { color: var(--danger); }
+
+  /* Fullscreen button */
+  #btn-fullscreen {
+    position: fixed; top: var(--hud-inset); right: var(--hud-inset);
+    width: 40px; height: 40px;
+    background: rgba(10,11,16,0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font-size: 1.1rem;
+    cursor: pointer;
+    z-index: 6;
+    transition: all var(--t-fast);
+    box-shadow: var(--shadow);
+  }
+  #btn-fullscreen:hover {
+    background: rgba(6,182,212,0.18);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Headshot toast */
+  #hs-toast {
+    position: fixed; top: 28%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.8);
+    color: #ffeb3b; font-size: 2.2rem; font-weight: 800;
+    text-shadow: 0 0 12px rgba(255,235,59,0.7), 0 2px 4px rgba(0,0,0,0.9);
+    pointer-events: none; z-index: 6; opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    letter-spacing: 2px;
+  }
+  #hs-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+  /* Spawn direction indicator */
+  #spawn-toast {
+    position: fixed; top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--accent);
+    font-size: 1.3rem; font-weight: 800;
+    text-shadow: 0 0 14px rgba(6,182,212,0.7), 0 2px 6px rgba(0,0,0,0.9);
+    pointer-events: none; z-index: 6; opacity: 0;
+    transition: opacity 0.15s;
+    letter-spacing: 2px;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 20px;
+    border-radius: var(--r);
+    border: 1px solid rgba(6,182,212,0.5);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    min-height: 100vh;
+    gap: 2px;
+    line-height: 1;
+  }
+  #spawn-toast.show { opacity: 1; }
+  #spawn-toast .row { display: flex; align-items: center; gap: 10px; }
+  #spawn-toast .arrow { font-size: 1.6rem; line-height: 1; }
+
+  /* World-space HP bars (above each target) */
+  .world-hpbar {
+    position: fixed;
+    width: 56px;
+    height: 6px;
+    background: rgba(0,0,0,0.65);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 4px;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    display: none;
+    z-index: 3;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  .world-hpbar.show { display: block; }
+  .world-hpbar .fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2ecc71 0%, #f1c40f 60%, #e74c3c 100%);
+    width: 100%;
+    transition: width 0.08s linear;
+  }
+
+  /* Weapon HUD */
+  #weapon-hud {
+    position: fixed;
+    bottom: var(--hud-inset);
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    gap: 8px;
+    z-index: 4;
+    font-size: 0.85rem;
+  }
+  #weapon-hud.show { display: flex; }
+  .weapon-slot {
+    background: rgba(0,0,0,0.55);
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.55);
+  }
+  .weapon-slot b {
+    display: inline-block;
+    width: 18px; height: 18px;
+    line-height: 18px;
+    text-align: center;
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+    margin-right: 6px;
+    font-size: 0.75rem;
+  }
+  .weapon-slot.active {
     color: #fff;
-    user-select: none;
-    -webkit-user-select: none;
+    border-color: #e94560;
+    background: rgba(233,69,96,0.18);
+  }
+  .weapon-slot.active b {
+    background: #e94560;
+  }
+
+  /* Pursuer direction bar (middle-left of screen) */
+  #dir-bar {
+    position: fixed;
+    top: 50%;
+    left: var(--hud-inset);
+    transform: translateY(-50%);
+    background: rgba(10,11,16,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 18px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    z-index: 4;
+    display: none;
+    text-align: center;
+    width: 240px;
+    box-shadow: var(--shadow);
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  #dir-bar.show { display: block; }
+  #dir-bar .dir-text {
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    color: var(--text);
+  }
+  #dir-bar .dir-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
     overflow: hidden;
   }
+  #dir-bar .dir-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    width: 0%;
+    border-radius: 999px;
+    transition: none;
+  }
+  #dir-bar .dir-hint {
+    font-size: 0.62rem;
+    opacity: 0.45;
+    margin-top: 7px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  #dir-bar.perfect {
+    border-color: var(--gold);
+    background: rgba(251,191,36,0.22);
+    box-shadow: 0 0 24px rgba(251,191,36,0.35), var(--shadow);
+  }
+  #dir-bar.perfect .dir-text { color: var(--gold); }
+  #dir-bar.correct {
+    border-color: var(--success);
+    background: rgba(16,185,129,0.18);
+  }
+  #dir-bar.correct .dir-text { color: var(--success); }
+  #dir-bar.wrong {
+    border-color: var(--danger);
+  }
+  #dir-bar.wrong .dir-text { color: var(--danger); }
 
-  #game-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  /* Dodge bar (player-driven fill, switch at green zone for max points) */
+  #dodge-bar {
+    position: fixed; top: 50%; right: var(--hud-inset);
+    transform: translateY(-50%);
+    background: rgba(10,11,16,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 18px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    z-index: 4; display: none;
+    text-align: center; width: 240px;
+    box-shadow: var(--shadow);
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  #dodge-bar.show { display: block; }
+  #dodge-bar .dodge-text {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  #dodge-bar .dodge-track {
     width: 100%;
-    max-width: 400px;
-    padding: 10px;
+    height: 14px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+  #dodge-bar .dodge-ideal {
+    position: absolute;
+    left: 75%; width: 25%;
+    height: 100%;
+    background: rgba(16,185,129,0.42);
+    border-left: 2px solid var(--success);
+  }
+  #dodge-bar .dodge-fill {
+    position: absolute;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    border-radius: 999px;
+    transition: none;
+  }
+  #dodge-bar .dodge-hint {
+    font-size: 0.62rem;
+    opacity: 0.5;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+  }
+  #dodge-bar.overshoot { border-color: var(--danger); background: rgba(239,68,68,0.18); }
+  #dodge-bar.overshoot .dodge-fill { background: var(--danger); }
+  #dodge-bar.ready { border-color: var(--success); background: rgba(16,185,129,0.18); }
+
+  /* Menu screens */
+  .screen {
+    position: fixed; inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center; align-items: center;
+    background: rgba(8,9,14,0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 20;
+    padding: 24px;
+    overflow-y: auto;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+  .screen.show {
+    display: flex;
+    opacity: 1;
+  }
+  .screen h1 {
+    font-size: 2.2rem;
+    margin-bottom: 4px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    text-align: center;
+  }
+  .screen h2 {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+    font-weight: 700;
+  }
+  .screen p, .screen label { font-size: 0.92rem; opacity: 0.88; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    border-radius: 999px;
+    margin-left: 10px;
+    vertical-align: middle;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: 0 0 16px rgba(6,182,212,0.3);
   }
 
-  h1 {
-    font-size: 1.6rem;
-    margin-bottom: 8px;
-    text-align: center;
+  .menu-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 8px 0 18px;
+    flex-wrap: wrap;
+  }
+  .menu-controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 8px 14px;
+    border-radius: var(--r);
+  }
+  .menu-controls select {
+    padding: 4px 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    font-size: 0.85rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .menu-controls select:focus { outline: 2px solid var(--accent); }
+
+  .section-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--text-dim);
+    margin: 18px 0 8px;
+    font-weight: 700;
+  }
+
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 260px);
+    gap: 10px;
+  }
+  @media (max-width: 580px) {
+    .menu-grid { grid-template-columns: 1fr; }
+  }
+
+  .btn {
+    padding: 14px 18px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: left;
+    transition: all var(--t-fast);
+    position: relative;
+    overflow: hidden;
+  }
+  .btn:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+  }
+  .btn:active { transform: translateY(0) scale(0.99); }
+  .btn .desc {
+    display: block;
+    font-size: 0.74rem;
+    font-weight: 500;
+    opacity: 0.6;
+    margin-top: 4px;
+    letter-spacing: 0.2px;
+  }
+  .btn .pb {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Aim category dots */
+  .cat-dot {
+    display: inline-block;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .cat-dot.tracking      { background: #06b6d4; box-shadow: 0 0 8px rgba(6,182,212,0.7); }
+  .cat-dot.click-timing  { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.7); }
+  .cat-dot.target-switch { background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,0.7); }
+  .cat-dot.none          { background: rgba(255,255,255,0.25); }
+
+  .cat-legend {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-top: 10px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-weight: 600;
+    text-transform: uppercase;
     letter-spacing: 1px;
   }
+  .cat-legend span { display: flex; align-items: center; }
 
-  #stats {
+  /* Scenario buttons get accent-colored left border */
+  .btn.primary { border-left: 3px solid var(--accent); }
+  .btn.primary:hover { border-color: var(--accent); box-shadow: 0 0 18px rgba(6,182,212,0.18); }
+  .btn.success { border-left: 3px solid var(--success); }
+  .btn.success:hover { box-shadow: 0 0 18px rgba(16,185,129,0.15); }
+  .btn.warn    { border-left: 3px solid var(--warning); }
+  .btn.warn:hover { box-shadow: 0 0 18px rgba(245,158,11,0.15); }
+  .btn.danger  { border-left: 3px solid var(--danger); }
+  .btn.danger:hover { box-shadow: 0 0 18px rgba(239,68,68,0.15); }
+  .btn.muted   {
+    background: var(--surface-2);
+    text-align: center;
+    font-size: 0.92rem;
+  }
+  .btn.muted:hover { background: var(--surface-3); }
+  .btn.center  { text-align: center; }
+
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .row.tight { gap: 4px; }
+
+  /* Sens / cal */
+  #menu .sens {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  #menu .sens kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin: 0 2px;
+  }
+  .cal {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; margin-bottom: 14px;
+  }
+  .cal .row label { font-size: 0.85rem; font-weight: 600; }
+  .cal input[type=number] {
+    width: 95px;
+    padding: 6px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--r-sm);
+    font-size: 0.9rem;
+    font-family: inherit;
+    font-weight: 600;
+  }
+  .cal input[type=number]:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .cal-hint {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    max-width: 380px;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  /* Settings panel */
+  #settings-panel { align-items: stretch; }
+  #settings-panel .container {
+    max-width: 760px;
+    width: 100%;
+    margin: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px 32px;
+    box-shadow: var(--shadow-lg);
+  }
+  #settings-panel h1 { text-align: left; margin-bottom: 18px; }
+  .settings-tabs {
+    display: flex; gap: 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .settings-tabs .tab {
+    padding: 10px 18px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    transition: color var(--t-fast), border-color var(--t-fast);
+    margin-bottom: -1px;
+  }
+  .settings-tabs .tab.active {
+    border-bottom-color: var(--accent);
+    color: var(--text);
+  }
+  .settings-tabs .tab:hover:not(.active) { color: var(--text-muted); }
+
+  .settings-content { padding: 4px 0 12px 0; }
+  .settings-content .section { display: none; }
+  .settings-content .section.active { display: block; }
+
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 4px;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .field:last-child { border-bottom: none; }
+  .field label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 150px;
+  }
+  .field .control { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: flex-end; }
+  .field input[type=range] {
+    flex: 1; max-width: 260px;
+    accent-color: var(--accent);
+  }
+  .field input[type=color] {
+    width: 44px; height: 30px;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    padding: 2px;
+  }
+  .field input[type=number] {
+    width: 80px; padding: 6px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--r-sm);
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+  .field select {
+    padding: 6px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--r-sm);
+    font-size: 0.88rem;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .field input[type=checkbox] {
+    width: 18px; height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .field .value {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    min-width: 42px;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .crosshair-preview {
+    width: 160px; height: 160px;
+    background: #1a1a1a;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r);
+    margin: 4px auto 16px;
+    position: relative;
+    background-image:
+      linear-gradient(45deg, #232323 25%, transparent 25%),
+      linear-gradient(-45deg, #232323 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #232323 75%),
+      linear-gradient(-45deg, transparent 75%, #232323 75%);
+    background-size: 24px 24px;
+    background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  .crosshair-preview canvas {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  /* Pause menu live stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 18px 26px;
+    border-radius: var(--r-lg);
+    margin-bottom: 18px;
+    min-width: 360px;
+    box-shadow: var(--shadow);
+  }
+  .stats-grid .label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+  }
+  .stats-grid .value {
+    font-size: 1.7rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Calibration overlay */
+  #cal-overlay {
+    position: fixed; inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center; align-items: center;
+    gap: 14px;
+    background: rgba(8,9,14,0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 30;
+    text-align: center; padding: 24px;
+  }
+  #cal-overlay.show { display: flex; }
+  #cal-overlay h2 { font-size: 2rem; font-weight: 800; }
+  #cal-overlay p { font-size: 1.05rem; opacity: 0.85; max-width: 480px; }
+  #cal-overlay .big {
+    font-size: 3rem; font-weight: 900; color: var(--accent);
+    text-shadow: 0 0 30px rgba(6,182,212,0.4);
+  }
+  #cal-overlay small { opacity: 0.55; font-size: 0.82rem; letter-spacing: 0.5px; }
+
+  /* Game over overlay */
+  #overlay { padding: 24px; }
+  #overlay .gameover-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 32px 44px;
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+    min-width: 420px;
+    max-width: 540px;
+  }
+  #overlay h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+  #overlay h2.complete { color: var(--success); }
+  #overlay h2.failed { color: var(--danger); }
+
+  .result-headline {
+    font-size: 3.2rem;
+    font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    margin: 14px 0 6px;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 30px rgba(6,182,212,0.3);
+  }
+  .result-sub {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 700;
+    margin-bottom: 18px;
+  }
+
+  .result-headline.pb {
+    color: var(--gold);
+    text-shadow: 0 0 36px rgba(251,191,36,0.7), 0 0 72px rgba(251,191,36,0.35);
+    animation: pbPulse 0.7s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pbPulse {
+    0%   { transform: scale(0.55); opacity: 0; }
+    35%  { transform: scale(1.18); opacity: 1; }
+    65%  { transform: scale(0.96); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .pb-pill {
+    display: inline-block;
+    padding: 8px 18px;
+    background: linear-gradient(135deg, var(--gold), #fb923c);
+    color: #000;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    box-shadow: 0 0 28px rgba(251,191,36,0.55);
+    animation: pillPop 0.7s cubic-bezier(.2,1.4,.4,1);
+  }
+  @keyframes pillPop {
+    0%   { transform: scale(0.5); opacity: 0; }
+    50%  { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .pb-delta {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--success);
+    margin-bottom: 16px;
+    letter-spacing: 0.3px;
+    text-shadow: 0 0 18px rgba(16,185,129,0.35);
+  }
+  .pb-delta.bad {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-shadow: none;
+  }
+  .pb-line {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+
+  /* Charts */
+  .charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 14px 0 6px;
+  }
+  .chart-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 10px 12px 8px;
+  }
+  .chart-card .chart-label {
     display: flex;
     justify-content: space-between;
-    width: 92vmin;
-    max-width: 440px;
-    margin-bottom: 10px;
-    font-size: 1.1rem;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .chart-card .chart-label .latest {
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-card {
+    cursor: pointer;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .chart-card:hover {
+    border-color: var(--accent);
+    background: rgba(6,182,212,0.06);
+  }
+  .chart-card canvas {
+    display: block;
+    width: 100%;
+    height: 70px;
+    pointer-events: none;
   }
 
-  #stats span {
-    background: rgba(255,255,255,0.1);
-    padding: 6px 14px;
-    border-radius: 8px;
+  /* Run history detail screen */
+  #history-screen .container {
+    max-width: 760px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px 32px;
+    box-shadow: var(--shadow-lg);
   }
-
-  #grid {
+  #history-screen h1 { text-align: left; margin-bottom: 4px; }
+  #history-screen .subtitle {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+  #history-screen .charts-row { margin-bottom: 18px; }
+  #history-screen .charts-row canvas { height: 110px; }
+  #history-screen table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  #history-screen th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    font-weight: 700;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #history-screen td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.85rem;
+  }
+  #history-screen tr.latest {
+    background: rgba(6,182,212,0.08);
+  }
+  #history-screen tr.best {
+    color: var(--gold);
+  }
+  #history-screen .summary {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 3px;
-    width: 92vmin;
-    max-width: 440px;
-    height: 92vmin;
-    max-height: 440px;
-    touch-action: manipulation;
-  }
-
-  .tile {
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.08s, transform 0.08s;
-    background: #000;
-    border: 1px solid rgba(255,255,255,0.12);
-  }
-
-  .tile.white {
-    background: #000;
-    border-color: rgba(255,255,255,0.12);
-  }
-
-  .tile.black {
-    background: #111;
-    border-color: rgba(255,255,255,0.5);
-  }
-
-  .tile.black:active {
-    transform: scale(0.95);
-  }
-
-  .tile.flash-red {
-    background: #e74c3c !important;
-  }
-
-  .tile.flash-green {
-    background: #2ecc71 !important;
-  }
-
-  /* Menu */
-  #menu {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     gap: 12px;
-  }
-
-  #menu button {
-    width: 220px;
+    margin-bottom: 18px;
     padding: 14px;
-    font-size: 1.1rem;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: transform 0.1s, box-shadow 0.1s;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+  }
+  #history-screen .summary .stat .lbl {
+    display: block;
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+  }
+  #history-screen .summary .stat .val {
+    font-size: 1.2rem;
+    font-weight: 800;
   }
 
-  #menu button:active {
-    transform: scale(0.97);
-  }
-
-  #btn-classic {
-    background: #0f3460;
-    color: #fff;
-  }
-
-  #btn-endurance {
-    background: #533483;
-    color: #fff;
-  }
-
-  #btn-zen {
-    background: #e94560;
-    color: #fff;
-  }
-
-  .mode-desc {
-    font-size: 0.78rem;
-    opacity: 0.7;
-    font-weight: 400;
-  }
-
-  /* Game Over overlay */
-  #overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.85);
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
+  .gameover-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 14px;
-    z-index: 10;
+    margin: 16px 0 22px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+  }
+  .gameover-stats .stat .lbl {
+    display: block;
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .gameover-stats .stat .val {
+    font-size: 1.3rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .gameover-stats .stat .val.in-band  { color: var(--success); }
+  .gameover-stats .stat .val.too-low  { color: var(--danger); }
+  .gameover-stats .stat .val.too-high { color: var(--warning); }
+
+  .acc-tip {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-top: -8px;
+    margin-bottom: 14px;
+    opacity: 0.9;
+  }
+  .acc-tip.in-band  { color: var(--success); }
+  .acc-tip.too-low  { color: var(--danger); }
+  .acc-tip.too-high { color: var(--warning); }
+
+  #best-score, #over-time {
+    font-size: 0.85rem;
+    color: var(--text-muted);
   }
 
-  #overlay.show { display: flex; }
-
-  #overlay h2 { font-size: 2rem; }
-  #overlay p { font-size: 1.2rem; opacity: 0.9; }
-
-  #overlay button {
-    padding: 12px 36px;
-    font-size: 1rem;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
+  .key-hint {
+    margin-top: 14px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
     font-weight: 600;
-    margin-top: 6px;
   }
 
-  #btn-retry { background: #0f3460; color: #fff; }
-  #btn-menu { background: #533483; color: #fff; }
+  /* Hit marker on crosshair (brief X pulse) */
+  #hit-marker {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px; height: 30px;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity 0.06s;
+  }
+  #hit-marker.show { opacity: 1; }
+  #hit-marker svg { width: 100%; height: 100%; }
+  #hit-marker.head svg line { stroke: var(--gold); }
+  #hit-marker svg line { stroke: var(--text); stroke-width: 3; stroke-linecap: round; }
 
-  #best-score {
-    font-size: 0.95rem;
-    opacity: 0.7;
+  /* Floating damage numbers */
+  .dmg-popup {
+    position: fixed;
+    pointer-events: none;
+    z-index: 6;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.7);
+    transform: translate(-50%, -50%);
+    animation: dmgFloat 0.7s ease-out forwards;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+  }
+  .dmg-popup.head { color: var(--gold); font-size: 1.4rem; }
+  .dmg-popup.kill { color: var(--success); font-size: 1.5rem; }
+  @keyframes dmgFloat {
+    0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+    15%  { transform: translate(-50%, -60%) scale(1.1); opacity: 1; }
+    100% { transform: translate(-50%, -110%) scale(0.9); opacity: 0; }
   }
 </style>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
 </head>
 <body>
-<div id="game-container">
-  <h1>Don't Tap the White Tile</h1>
 
-  <!-- Menu -->
-  <div id="menu">
-    <button id="btn-classic">Classic<br><span class="mode-desc">Tap 50 black tiles as fast as you can</span></button>
-    <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive as long as you can — 60 seconds</span></button>
-    <button id="btn-zen">Zen<br><span class="mode-desc">No timer, no pressure — just tap</span></button>
+<div id="scene-wrap"></div>
+
+<canvas id="crosshair" width="120" height="120"></canvas>
+
+<div id="hud" class="hide">
+  <span id="score-display"><span class="label">Score</span><span id="score-val">0</span></span>
+  <span id="timer-display" style="display:none;"><span class="label">Time</span><span id="timer-val">0.00</span></span>
+  <span id="acc-display"><span class="label">Acc</span><span id="acc-val">0%</span></span>
+</div>
+
+<div id="streak">
+  <span class="label">Streak</span>
+  <div class="value" id="streak-val">0</div>
+</div>
+
+<div id="hit-marker">
+  <svg viewBox="0 0 30 30">
+    <line x1="6" y1="6" x2="13" y2="13"></line>
+    <line x1="24" y1="6" x2="17" y2="13"></line>
+    <line x1="6" y1="24" x2="13" y2="17"></line>
+    <line x1="24" y1="24" x2="17" y2="17"></line>
+  </svg>
+</div>
+
+<div id="fps-counter">— FPS</div>
+<button id="btn-fullscreen" title="Fullscreen (F)">⛶</button>
+<div id="hs-toast"></div>
+<div id="spawn-toast"></div>
+<div id="dodge-bar">
+  <div class="dodge-text" id="dodge-arrow">↔ STRAFE</div>
+  <div class="dodge-track">
+    <div class="dodge-ideal"></div>
+    <div class="dodge-fill" id="dodge-fill"></div>
   </div>
+  <div class="dodge-hint">switch direction when bar reaches the green zone · ×2 multiplier</div>
+</div>
 
-  <!-- In-game -->
-  <div id="game" style="display:none;">
-    <div id="stats">
-      <span id="score-display">Score: 0</span>
-      <span id="timer-display" style="display:none;">Time: 0.00</span>
+<div id="weapon-hud">
+  <span class="weapon-slot" data-w="hitscan"><b>1</b> Click Timing</span>
+  <span class="weapon-slot" data-w="tracking"><b>2</b> Tracking</span>
+</div>
+
+<div id="dir-bar">
+  <div class="dir-text" id="dir-bar-text">— STRAFE —</div>
+  <div class="dir-track"><div class="dir-fill" id="dir-bar-fill"></div></div>
+  <div class="dir-hint">switch direction when bar fills · ×2 when correct</div>
+</div>
+
+<!-- ===== Main Menu ===== -->
+<div id="menu" class="screen show">
+  <h1>Browser Aim Trainer<span class="badge">3D · FPS</span></h1>
+  <div class="sens">F Fullscreen · ESC Pause · R Restart · 1/2 Switch Weapon</div>
+
+  <div class="cal">
+    <div class="row">
+      <label>in / 360°: <input id="cal-input" type="number" step="0.01" value="15.4083"></label>
+      <button class="btn muted" id="cal-reset" type="button">reset</button>
+      <button class="btn muted" id="cal-start" type="button">calibrate</button>
+      <button class="btn muted" id="cal-setup" type="button">setup</button>
     </div>
-    <div id="grid"></div>
+    <div class="cal-hint">Browser pointer lock loses raw counts to OS pointer settings — calibrate or tweak the value above. <b>Setup</b> reopens the welcome flow.</div>
+  </div>
+
+  <div class="menu-controls">
+    <label>Difficulty:
+      <select id="difficulty-select">
+        <option value="easy">Easy</option>
+        <option value="normal" selected>Normal</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
+    <label>Weapon:
+      <select id="menu-weapon-select">
+        <option value="hitscan">Click Timing</option>
+        <option value="tracking">Tracking</option>
+      </select>
+    </label>
+    <label>Pursuer Pattern:
+      <select id="menu-pattern-select">
+        <option value="long">Long (Easiest)</option>
+        <option value="medium">Medium</option>
+        <option value="short">Short (Hardest)</option>
+        <option value="varied">Varied</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="section-label">Click Timing</div>
+  <div class="menu-grid">
+    <button class="btn primary" id="btn-classic"><span class="cat-dot click-timing"></span>Classic<span class="desc">Hit 50 targets · fastest time wins</span></button>
+    <button class="btn warn" id="btn-endurance"><span class="cat-dot click-timing"></span>Endurance<span class="desc">Survive 60s · don't miss</span></button>
+    <button class="btn muted" id="btn-zen"><span class="cat-dot none"></span>Zen<span class="desc">No timer · just shoot</span></button>
+    <button class="btn success" id="btn-flicks"><span class="cat-dot click-timing"></span>Flicks<span class="desc">One target at random spots</span></button>
+  </div>
+
+  <div class="section-label">Tracking & Movement</div>
+  <div class="menu-grid">
+    <button class="btn success" id="btn-tracking"><span class="cat-dot tracking"></span>Tracking<span class="desc">Bouncing targets · headshots ×2</span></button>
+    <button class="btn success" id="btn-cylinder"><span class="cat-dot tracking"></span>Pursuer<span class="desc">One bot kites you · health bar</span></button>
+    <button class="btn danger" id="btn-dodge"><span class="cat-dot target-switch"></span>Dodge<span class="desc">WASD · strafe with the bar for ×2</span></button>
+    <button class="btn warn" id="btn-pole"><span class="cat-dot target-switch"></span>Pole Practice<span class="desc">Stationary thin pole · pure strafe-form drill</span></button>
+  </div>
+
+  <div class="cat-legend">
+    <span><span class="cat-dot tracking"></span>Tracking</span>
+    <span><span class="cat-dot click-timing"></span>Click Timing</span>
+    <span><span class="cat-dot target-switch"></span>Target Switching</span>
+  </div>
+
+  <div class="row" style="margin-top:14px;">
+    <button class="btn muted" id="btn-settings">⚙ Settings</button>
   </div>
 </div>
 
-<!-- Game Over -->
-<div id="overlay">
-  <h2 id="over-title">Game Over</h2>
-  <p id="over-score"></p>
-  <p id="over-time"></p>
-  <p id="best-score"></p>
-  <button id="btn-retry">Play Again</button>
-  <button id="btn-menu">Menu</button>
+<!-- ===== Pause Menu ===== -->
+<div id="pause-menu" class="screen">
+  <h1>Paused</h1>
+  <div class="stats-grid" id="pause-stats">
+    <div><div class="label">Score</div><div class="value" id="pause-score">0</div></div>
+    <div><div class="label">Time</div><div class="value" id="pause-time">0.0</div></div>
+    <div><div class="label">Accuracy</div><div class="value" id="pause-acc">0%</div></div>
+    <div><div class="label">Hits / Shots</div><div class="value" id="pause-hits">0/0</div></div>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="pause-resume">Resume</button>
+    <button class="btn success" id="pause-restart">Restart</button>
+    <button class="btn muted" id="pause-settings">⚙ Settings</button>
+    <button class="btn muted" id="pause-fullscreen">⛶ Fullscreen</button>
+    <button class="btn danger" id="pause-menu-btn">Main Menu</button>
+  </div>
+  <div class="key-hint">Click to resume aim · ESC again to quit</div>
 </div>
 
-<script>
-const NUM_BLACK = 3;
-const GRID_SIZE = 16;
-const CLASSIC_TARGET = 50;
-const ENDURANCE_TIME = 60;
+<!-- ===== Settings Panel ===== -->
+<div id="settings-panel" class="screen">
+  <div class="container">
+    <h1>Settings</h1>
+    <div class="settings-tabs">
+      <div class="tab active" data-tab="crosshair">Crosshair</div>
+      <div class="tab" data-tab="audio">Audio</div>
+      <div class="tab" data-tab="visual">Visual</div>
+      <div class="tab" data-tab="gameplay">Gameplay</div>
+    </div>
+    <div class="settings-content">
 
-let tiles = [];
-let blackTiles = new Set();
-let score = 0;
+      <div class="section active" data-section="crosshair">
+        <div class="crosshair-preview"><canvas id="crosshair-preview-canvas" width="120" height="120"></canvas></div>
+        <div class="field"><label>Style</label>
+          <select id="set-xhair-style">
+            <option value="cross">Cross</option>
+            <option value="dot">Dot only</option>
+            <option value="circle">Circle</option>
+            <option value="t">T (no bottom)</option>
+          </select>
+        </div>
+        <div class="field"><label>Size</label><input type="range" id="set-xhair-size" min="2" max="30" step="1"><span class="value" id="set-xhair-size-v"></span></div>
+        <div class="field"><label>Thickness</label><input type="range" id="set-xhair-thick" min="1" max="6" step="1"><span class="value" id="set-xhair-thick-v"></span></div>
+        <div class="field"><label>Gap</label><input type="range" id="set-xhair-gap" min="0" max="20" step="1"><span class="value" id="set-xhair-gap-v"></span></div>
+        <div class="field"><label>Color</label><input type="color" id="set-xhair-color"></div>
+        <div class="field"><label>Outline</label><input type="checkbox" id="set-xhair-outline"></div>
+        <div class="field"><label>Center dot</label><input type="checkbox" id="set-xhair-dot"></div>
+        <div class="field"><label>Dot size</label><input type="range" id="set-xhair-dotsize" min="1" max="8" step="1"><span class="value" id="set-xhair-dotsize-v"></span></div>
+        <div class="field"><label>Dot color</label><input type="color" id="set-xhair-dotcolor"></div>
+      </div>
+
+      <div class="section" data-section="audio">
+        <div class="field"><label>Hit sound</label>
+          <select id="set-hitsound">
+            <option value="pop">Pop</option>
+            <option value="tick">Tick</option>
+            <option value="beep">Beep</option>
+            <option value="thock">Thock</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div class="field"><label>Miss sound</label><input type="checkbox" id="set-misssound"></div>
+        <div class="field"><label>Volume</label><input type="range" id="set-volume" min="0" max="100" step="5"><span class="value" id="set-volume-v"></span></div>
+      </div>
+
+      <div class="section" data-section="visual">
+        <div class="field"><label>Skybox</label>
+          <select id="set-skybox">
+            <option value="void">Void (black)</option>
+            <option value="range">Shooting Range</option>
+            <option value="daylight">Daylight</option>
+            <option value="sunset">Sunset</option>
+            <option value="twilight">Twilight</option>
+            <option value="space">Space</option>
+          </select>
+        </div>
+        <div class="field"><label>Target color</label><input type="color" id="set-target-color"></div>
+        <div class="field"><label>Head color</label><input type="color" id="set-head-color"></div>
+        <div class="field"><label>FOV</label><input type="range" id="set-fov" min="60" max="120" step="1"><span class="value" id="set-fov-v"></span></div>
+        <div class="field"><label>HUD distance from edge</label><input type="range" id="set-hud-inset" min="0" max="120" step="2"><span class="value" id="set-hud-inset-v"></span></div>
+      </div>
+
+      <div class="section" data-section="gameplay">
+        <div class="field"><label>Weapon</label>
+          <select id="set-weapon">
+            <option value="hitscan">Hitscan (semi-auto, 1-shot kill)</option>
+            <option value="tracking">Tracking (auto, lower dmg)</option>
+          </select>
+        </div>
+        <div class="field"><label>Difficulty</label>
+          <select id="set-difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal">Normal</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+        <div class="field"><label>Walk speed (m/s)</label><input type="range" id="set-speed" min="3" max="9" step="0.1"><span class="value" id="set-speed-v"></span></div>
+        <div class="field"><label>Tracking targets</label><input type="number" id="set-tracking-count" min="1" max="8"></div>
+        <div class="field"><label>Pursuer pattern</label>
+          <select id="set-pursuer-pattern">
+            <option value="long">Long strafes (easiest aim)</option>
+            <option value="medium">Medium strafes</option>
+            <option value="short">Short strafes (hardest aim)</option>
+            <option value="varied">Varied</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 14px;">
+      <button class="btn primary" id="settings-back">Done</button>
+      <button class="btn muted" id="settings-reset">Reset Defaults</button>
+    </div>
+  </div>
+</div>
+
+<!-- First-run sensitivity prompt -->
+<div id="first-run" class="screen">
+  <h1>Welcome</h1>
+  <p style="max-width:480px;text-align:center;margin-bottom:14px;">
+    Enter your sensitivity from whatever game you want to match — measured in <b>inches per 360°</b>.<br>
+    A sensitivity converter (mouse-sensitivity.com etc.) can give you this value, or use the in-game calibration tool after setup.
+  </p>
+  <div class="row" style="margin-bottom:10px;">
+    <label>in / 360°: <input id="first-run-input" type="number" step="0.01" min="0.1" style="width:120px;padding:6px 8px;background:#111;border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:4px;font-size:1.1rem;"></label>
+  </div>
+  <p style="font-size:0.78rem;opacity:0.55;max-width:420px;text-align:center;margin-bottom:14px;">
+    Don't know? You can skip and tweak it later, or open Calibrate to swipe a 360° in your game and have it auto-detected.
+  </p>
+  <div class="row">
+    <button class="btn primary" id="first-run-save">Save & Continue</button>
+    <button class="btn muted" id="first-run-skip">Skip</button>
+  </div>
+</div>
+
+<!-- Calibration overlay -->
+<div id="cal-overlay">
+  <h2>Calibration</h2>
+  <p>Swipe one full <b>360°</b> as you would in your reference game, then press <b>SPACE</b>.</p>
+  <p class="big" id="cal-live">0 movement units</p>
+  <p>Suggested in / 360°: <b id="cal-suggest">—</b></p>
+  <small>ESC to cancel</small>
+</div>
+
+<!-- Run history drill-down -->
+<div id="history-screen" class="screen">
+  <div class="container">
+    <h1 id="history-title">Run History</h1>
+    <div class="subtitle" id="history-subtitle"></div>
+    <div class="summary" id="history-summary"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label"><span>Score</span><span class="latest" id="hist-score-latest"></span></div>
+        <canvas id="hist-chart-score" width="640" height="110"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label"><span>Accuracy</span><span class="latest" id="hist-acc-latest"></span></div>
+        <canvas id="hist-chart-acc" width="640" height="110"></canvas>
+      </div>
+    </div>
+    <table id="history-table">
+      <thead>
+        <tr><th>#</th><th>Date</th><th>Score</th><th>Acc</th><th>Hits</th><th>HS</th><th>Mul</th><th>Streak</th></tr>
+      </thead>
+      <tbody id="history-rows"></tbody>
+    </table>
+    <div class="row" style="margin-top: 18px;">
+      <button class="btn primary" id="history-back">Back</button>
+      <button class="btn danger" id="history-clear">Clear History</button>
+    </div>
+  </div>
+</div>
+
+<!-- Game over overlay -->
+<div id="overlay" class="screen">
+  <div class="gameover-card">
+    <h2 id="over-title">Game Over</h2>
+    <div class="result-headline" id="result-headline">0</div>
+    <div class="result-sub" id="result-sub">Score</div>
+    <div id="pb-pill" class="pb-pill" style="display:none;">★ NEW BEST</div>
+    <div class="pb-delta" id="pb-delta" style="display:none;"></div>
+    <div class="pb-line" id="pb-line"></div>
+    <div class="gameover-stats" style="grid-template-columns: repeat(5, 1fr);">
+      <div class="stat"><span class="lbl">Accuracy</span><span class="val" id="go-acc">0%</span></div>
+      <div class="stat"><span class="lbl">Hits</span><span class="val" id="go-hits">0/0</span></div>
+      <div class="stat"><span class="lbl">Best Streak</span><span class="val" id="go-streak">0</span></div>
+      <div class="stat"><span class="lbl">Notice</span><span class="val" id="go-notice">—</span></div>
+      <div class="stat"><span class="lbl">Flick</span><span class="val" id="go-flick">—</span></div>
+    </div>
+    <div class="acc-tip" id="acc-tip"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label"><span>Score · Last Runs</span><span class="latest" id="chart-score-latest"></span></div>
+        <canvas id="chart-score" width="280" height="70"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label"><span>Accuracy · Last Runs</span><span class="latest" id="chart-acc-latest"></span></div>
+        <canvas id="chart-acc" width="280" height="70"></canvas>
+      </div>
+    </div>
+    <p id="over-time"></p>
+    <p id="best-score"></p>
+    <div class="row" style="margin-top: 18px;">
+      <button class="btn primary" id="btn-retry">Play Again</button>
+      <button class="btn muted" id="btn-menu">Menu</button>
+    </div>
+    <div class="key-hint">R to restart · ESC for menu</div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================================
+// Settings (persisted to localStorage)
+// ============================================================================
+const SETTINGS_KEY = 'aimtrain_settings_v1';
+const DEFAULT_SETTINGS = {
+  crosshair: {
+    style: 'cross',
+    size: 10, thickness: 2, gap: 4,
+    color: '#ffffff',
+    outline: true,
+    dot: true, dotSize: 2, dotColor: '#ff3030'
+  },
+  hitsound: 'pop',
+  misssound: false,
+  volume: 50,
+  skybox: 'range',
+  targetColor: '#f2f2f2',
+  headColor: '#ff6b6b',
+  fov: 90,
+  difficulty: 'normal',
+  walkSpeed: 5.5,
+  trackingCount: 4,
+  weapon: 'hitscan',
+  pursuerPattern: 'varied',
+  hudInset: 16
+};
+
+const WEAPONS = {
+  hitscan:  { dmgBody: 1,    dmgHead: 2,    fireInterval: 0,   auto: false },
+  tracking: { dmgBody: 0.08, dmgHead: 0.16, fireInterval: 50,  auto: true  }
+};
+function currentWeapon() { return WEAPONS[Settings.weapon] || WEAPONS.hitscan; }
+
+const Settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    deepMerge(Settings, saved);
+  } catch {}
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(Settings));
+}
+function deepMerge(target, src) {
+  for (const k in src) {
+    if (src[k] && typeof src[k] === 'object' && !Array.isArray(src[k])) {
+      target[k] = target[k] || {};
+      deepMerge(target[k], src[k]);
+    } else {
+      target[k] = src[k];
+    }
+  }
+}
+loadSettings();
+
+// ============================================================================
+// Run history (last N runs per mode-difficulty)
+// ============================================================================
+const HISTORY_PREFIX = 'runs2_';
+const MAX_HISTORY = 20;
+function getRunHistory(key) {
+  try { return JSON.parse(localStorage.getItem(HISTORY_PREFIX + key) || '[]'); }
+  catch { return []; }
+}
+function pushRunHistory(key, run) {
+  const arr = getRunHistory(key);
+  arr.push(run);
+  while (arr.length > MAX_HISTORY) arr.shift();
+  localStorage.setItem(HISTORY_PREFIX + key, JSON.stringify(arr));
+  return arr;
+}
+
+// ============================================================================
+// Sensitivity — user-specified inches per 360° (any game), persisted to localStorage
+// ============================================================================
+const DPI = 1000;
+const DEFAULT_INCHES_PER_360 = 15.4083;
+let inchesPer360 = parseFloat(localStorage.getItem('cal_in360') || '') || DEFAULT_INCHES_PER_360;
+let radPerCount = (2 * Math.PI) / (inchesPer360 * DPI);
+function setInches(v) {
+  inchesPer360 = v;
+  radPerCount = (2 * Math.PI) / (inchesPer360 * DPI);
+  localStorage.setItem('cal_in360', String(v));
+}
+
+// ============================================================================
+// Audio (Web Audio synth)
+// ============================================================================
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function vol() { return Settings.volume / 100; }
+
+const HitSounds = {
+  pop(pitch = 1) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(900 * pitch, t);
+    o.frequency.exponentialRampToValueAtTime(120 * pitch, t + 0.07);
+    g.gain.setValueAtTime(0.18 * vol(), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.09);
+  },
+  tick(pitch = 1) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(2200 * pitch, t);
+    g.gain.setValueAtTime(0.12 * vol(), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.05);
+  },
+  beep(pitch = 1) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(660 * pitch, t);
+    g.gain.setValueAtTime(0.16 * vol(), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.08);
+  },
+  thock(pitch = 1) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(180 * pitch, t);
+    o.frequency.exponentialRampToValueAtTime(60 * pitch, t + 0.06);
+    g.gain.setValueAtTime(0.22 * vol(), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t); o.stop(t + 0.08);
+  },
+  off() {}
+};
+
+function playHit(isHead) {
+  const fn = HitSounds[Settings.hitsound] || HitSounds.pop;
+  fn(isHead ? 1.6 : 1.0);
+}
+function playMiss() {
+  if (!Settings.misssound || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(60, t + 0.1);
+  g.gain.setValueAtTime(0.08 * vol(), t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.13);
+}
+
+// 3D positional spawn sound — uses Web Audio panner so it sounds like it comes from the target's location
+function updateAudioListener() {
+  if (!audioCtx) return;
+  const l = audioCtx.listener;
+  const fwd = forward;
+  camera.getWorldDirection(fwd);
+  if (l.positionX) {
+    l.positionX.value = camera.position.x;
+    l.positionY.value = camera.position.y;
+    l.positionZ.value = camera.position.z;
+    l.forwardX.value = fwd.x;
+    l.forwardY.value = fwd.y;
+    l.forwardZ.value = fwd.z;
+    l.upX.value = 0; l.upY.value = 1; l.upZ.value = 0;
+  } else {
+    l.setPosition(camera.position.x, camera.position.y, camera.position.z);
+    l.setOrientation(fwd.x, fwd.y, fwd.z, 0, 1, 0);
+  }
+}
+
+function playSpawnAt(x, y, z) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  const p = audioCtx.createPanner();
+  p.panningModel = 'HRTF';
+  p.distanceModel = 'inverse';
+  p.refDistance = 1;
+  p.maxDistance = 60;
+  p.rolloffFactor = 1.2;
+  if (p.positionX) {
+    p.positionX.value = x;
+    p.positionY.value = y;
+    p.positionZ.value = z;
+  } else {
+    p.setPosition(x, y, z);
+  }
+  o.type = 'sine';
+  o.frequency.setValueAtTime(520, t);
+  o.frequency.exponentialRampToValueAtTime(1100, t + 0.07);
+  o.frequency.exponentialRampToValueAtTime(700, t + 0.16);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.85 * vol(), t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(g).connect(p).connect(audioCtx.destination);
+  o.start(t);
+  o.stop(t + 0.24);
+}
+
+// Show direction indicator if spawn is significantly off-axis from camera view
+const _spawnVec = new THREE.Vector3();
+function maybeShowSpawnDirection(x, y, z) {
+  _spawnVec.set(x, y, z);
+  camera.worldToLocal(_spawnVec);
+  // Camera local: -Z is forward, +X is right, +Y is up
+  const horizAngleDeg = Math.atan2(_spawnVec.x, -_spawnVec.z) * 180 / Math.PI;
+  const halfFov = (Settings.fov * 0.55);
+  // In-view check: in front of camera AND within ~half FOV horizontally
+  if (_spawnVec.z < 0 && Math.abs(horizAngleDeg) <= halfFov) return;
+
+  let html;
+  const isBehind = _spawnVec.z > 0;
+  if (isBehind) {
+    // Behind: text on top, arrow underneath
+    if (horizAngleDeg > 30) html = `<div>BEHIND RIGHT</div><div class="arrow">↘</div>`;
+    else if (horizAngleDeg < -30) html = `<div>BEHIND LEFT</div><div class="arrow">↙</div>`;
+    else html = `<div>BEHIND</div><div class="arrow">↓</div>`;
+  } else if (horizAngleDeg > 0) {
+    // To the right: text on left, arrow on right
+    html = `<div class="row"><div>RIGHT</div><div class="arrow">→</div></div>`;
+  } else {
+    // To the left: arrow on left, text on right
+    html = `<div class="row"><div class="arrow">←</div><div>LEFT</div></div>`;
+  }
+  spawnToast.innerHTML = html;
+  spawnToast.classList.add('show');
+  clearTimeout(maybeShowSpawnDirection._t);
+  maybeShowSpawnDirection._t = setTimeout(() => spawnToast.classList.remove('show'), 700);
+}
+
+// Light tick sounds for tracking weapon — deeper, softer pop
+function playTrackingTick(hit) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(hit ? 380 : 160, t);
+  if (hit) o.frequency.exponentialRampToValueAtTime(220, t + 0.03);
+  g.gain.setValueAtTime((hit ? 0.08 : 0.04) * vol(), t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.05);
+}
+
+// ============================================================================
+// Game state
+// ============================================================================
 let mode = '';
 let gameActive = false;
-let timerInterval = null;
+let gamePaused = false;
+let score = 0;
+let shotsFired = 0;
+let shotsHit = 0;
+let headshots = 0;
+let streak = 0;
+let bestStreak = 0;
+let multiplierSum = 0;  // sum of movement multipliers across all kills (applied at end)
 let startTime = 0;
+let pausedAt = 0;
+let totalPausedMs = 0;
 let timeLeft = 0;
+let timerDuration = 0;
 
-const grid = document.getElementById('grid');
+// Tile state
+let blackTiles = new Set();
+
+// Tracking enemy state
+const enemies = [];
+
+// Movement state
+const playerVel = new THREE.Vector3();
+const keys = {};
+
+// Dodge state — player-driven fill bar; switching at 90-100% earns max points
+let dodgeFill = 0;             // 0..1+, can overshoot
+let dodgeDuration = 1.5;       // seconds to reach 1.0 — varies per pattern
+let dodgeMul = 1;
+let dodgePrevStrafeKey = 'none';
+
+// Pursuer direction-bar state
+let pursuerDir = 'left';
+let pursuerFill = 0;       // 0..1
+let pursuerMul = 1;
+let pursuerCurrentDur = 2.5;
+
+// Conditional movement scoring (per AIMER7 strafe-aim doc)
+// — multiplier only applies when player's strafe change happens within a reactive window after the bar flip
+let pursuerLastFlipTime = 0;
+let pursuerLastStrafeChangeTime = -10000;
+let pursuerPrevStrafeKey = 'none';
+const REACT_WINDOW_MIN = 150;  // ms
+const REACT_WINDOW_MAX = 500;  // ms
+
+// Reactivity tracking — split into two parts (per AIMER7 strafe doc):
+//  - notice (reactive part): time from bot's direction flip until player starts braking the old direction
+//  - flick  (correcting part): time from start of braking until mouse direction matches new direction
+let pursuerReactStart = 0;
+let pursuerReactPhase = 0;         // 0 idle, 1 awaiting brake, 2 awaiting sign-flip
+let pursuerReactFromSign = 0;
+let pursuerReactPreMag = 0;
+let pursuerReactNoticeAt = 0;
+let pursuerReactiveSamples = [];   // notice ms
+let pursuerCorrectSamples = [];    // flick ms
+
+let mouseXSmooth = 0;              // exponentially smoothed movementX
+const MOUSE_SMOOTH_ALPHA = 0.35;
+const MOUSE_SIGN_THRESH = 0.6;     // ignore tiny jitter
+
+// Camera rotation
+let yaw = 0;
+let pitch = 0;
+const PITCH_LIMIT = Math.PI / 2 - 0.01;
+
+// ============================================================================
+// DOM
+// ============================================================================
+const $ = id => document.getElementById(id);
+const sceneWrap = $('scene-wrap');
+const menuScreen = $('menu');
+const pauseScreen = $('pause-menu');
+const settingsScreen = $('settings-panel');
+const overlayScreen = $('overlay');
+const calOverlay = $('cal-overlay');
+const hud = $('hud');
+const crosshair = $('crosshair');
+const fpsCounter = $('fps-counter');
+const fsButton = $('btn-fullscreen');
+const hsToast = $('hs-toast');
+const dodgeBar = $('dodge-bar');
+const dodgeArrow = $('dodge-arrow');
+const dodgeFillEl = $('dodge-fill');
+const spawnToast = $('spawn-toast');
+const dirBar = $('dir-bar');
+const dirBarText = $('dir-bar-text');
+const dirBarFill = $('dir-bar-fill');
+const weaponHud = $('weapon-hud');
+const hpBarLayer = document.createElement('div');
+hpBarLayer.id = 'hp-bar-layer';
+document.body.appendChild(hpBarLayer);
+const scoreDisplay = $('score-display');
+const scoreVal = $('score-val');
+const timerDisplay = $('timer-display');
+const timerVal = $('timer-val');
+const accDisplay = $('acc-display');
+const accVal = $('acc-val');
+const streakEl = $('streak');
+const streakValEl = $('streak-val');
+const hitMarker = $('hit-marker');
+
+const overTitle = $('over-title');
+const overScore = $('over-score');
+const overTime = $('over-time');
+const bestScoreEl = $('best-score');
+
 document.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('dragstart', e => e.preventDefault());
-const menu = document.getElementById('menu');
-const gameDiv = document.getElementById('game');
-const scoreDisplay = document.getElementById('score-display');
-const timerDisplay = document.getElementById('timer-display');
-const overlay = document.getElementById('overlay');
-const overTitle = document.getElementById('over-title');
-const overScore = document.getElementById('over-score');
-const overTime = document.getElementById('over-time');
-const bestScoreEl = document.getElementById('best-score');
 
-// Build grid
+// ============================================================================
+// Three.js setup
+// ============================================================================
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05060a);
+scene.fog = new THREE.Fog(0x05060a, 12, 60);
+
+const camera = new THREE.PerspectiveCamera(Settings.fov, window.innerWidth / window.innerHeight, 0.05, 200);
+camera.position.set(0, 1.6, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sceneWrap.appendChild(renderer.domElement);
+const canvasEl = renderer.domElement;
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+dirLight.position.set(8, 14, 4);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.left = -20;
+dirLight.shadow.camera.right = 20;
+dirLight.shadow.camera.top = 20;
+dirLight.shadow.camera.bottom = -20;
+scene.add(dirLight);
+
+const spot = new THREE.SpotLight(0xffffff, 28, 25, Math.PI / 5, 0.4, 1.2);
+spot.position.set(0, 7, 2);
+spot.target.position.set(0, 3.1, -8);
+spot.castShadow = true;
+spot.shadow.mapSize.set(1024, 1024);
+scene.add(spot);
+scene.add(spot.target);
+
+// Floor
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x121418, metalness: 0.05, roughness: 0.9 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Back wall (panel backdrop)
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x0c0e12, metalness: 0.04, roughness: 0.95 });
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 14), wallMat);
+backWall.position.set(0, 7, -10);
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+// Dodge room walls (only visible/used in dodge mode)
+const ROOM_HALF = 14;
+const ROOM_HEIGHT = 8;
+const dodgeRoom = new THREE.Group();
+const wallGeo1 = new THREE.PlaneGeometry(ROOM_HALF * 2, ROOM_HEIGHT);
+const wallMat2 = new THREE.MeshStandardMaterial({ color: 0x161922, metalness: 0.05, roughness: 0.85 });
+function addRoomWall(px, pz, ry) {
+  const w = new THREE.Mesh(wallGeo1, wallMat2);
+  w.position.set(px, ROOM_HEIGHT / 2, pz);
+  w.rotation.y = ry;
+  w.receiveShadow = true;
+  dodgeRoom.add(w);
+}
+addRoomWall(0, -ROOM_HALF, 0);
+addRoomWall(0,  ROOM_HALF, Math.PI);
+addRoomWall(-ROOM_HALF, 0,  Math.PI / 2);
+addRoomWall( ROOM_HALF, 0, -Math.PI / 2);
+dodgeRoom.visible = false;
+scene.add(dodgeRoom);
+
+// ============================================================================
+// Tile grid (4x4 panel — for static modes)
+// ============================================================================
+const TILE_SIZE = 1.2;
+const GAP = 0.18;
+const STEP = TILE_SIZE + GAP;
+const GRID_OFFSET = -((4 - 1) * STEP) / 2;
+const PANEL_Z = -8;
+const PANEL_Y = 3.1;
+const GRID_SIZE = 16;
+const NUM_BLACK = 3;
+const CLASSIC_TARGET = 50;
+const ENDURANCE_TIME = 60;
+const TRACKING_DURATION = 60;
+const DODGE_DURATION = 60;
+const FLICKS_DURATION = 60;
+const CYLINDER_DURATION = 60;
+
+const tileMeshes = [];
+const tileEdges = [];
+const tileAnim = Array.from({ length: GRID_SIZE }, () => ({ press: 0, flashUntil: 0, flashColor: null }));
+
+const tileGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE, 0.18);
+const tileEdgeGeo = new THREE.EdgesGeometry(tileGeo);
+
+const COLOR_INACTIVE = new THREE.Color(0x0a0a0a);
+const COLOR_GREEN = new THREE.Color(0x2ecc71);
+const COLOR_RED = new THREE.Color(0xe74c3c);
+const EDGE_DIM = new THREE.Color(0x222222);
+const EDGE_BRIGHT = new THREE.Color(0xffffff);
+
 for (let i = 0; i < GRID_SIZE; i++) {
-  const tile = document.createElement('div');
-  tile.classList.add('tile', 'white');
-  tile.dataset.index = i;
-  grid.appendChild(tile);
-  tiles.push(tile);
+  const row = Math.floor(i / 4);
+  const col = i % 4;
+  const x = GRID_OFFSET + col * STEP;
+  const y = PANEL_Y - GRID_OFFSET - row * STEP;
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: COLOR_INACTIVE,
+    emissive: 0x000000, emissiveIntensity: 1.0,
+    metalness: 0.1, roughness: 0.5
+  });
+  const mesh = new THREE.Mesh(tileGeo, mat);
+  mesh.position.set(x, y, PANEL_Z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.index = i;
+  scene.add(mesh);
+  tileMeshes.push(mesh);
+
+  const edgeMat = new THREE.LineBasicMaterial({ color: EDGE_DIM });
+  const edges = new THREE.LineSegments(tileEdgeGeo, edgeMat);
+  mesh.add(edges);
+  tileEdges.push(edgeMat);
 }
 
-// Event delegation on grid — find tile by coordinates so corner/edge clicks always register
-grid.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  const rect = grid.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  const col = Math.floor((x / rect.width) * 4);
-  const row = Math.floor((y / rect.height) * 4);
-  if (col < 0 || col > 3 || row < 0 || row > 3) return;
-  handleTap(row * 4 + col);
+// ============================================================================
+// Enemy targets (tracking + dodge)
+// ============================================================================
+const PANEL_HALF_W = 5.5;
+const PANEL_TOP    = PANEL_Y + 2.6;
+const PANEL_BOTTOM = PANEL_Y - 2.6;
+const ENEMY_BODY_SIZE = 0.85;
+const ENEMY_HEAD_SIZE = 0.42;
+const ENEMY_Z = PANEL_Z + 0.45;
+
+const enemyBodyGeo = new THREE.BoxGeometry(ENEMY_BODY_SIZE, ENEMY_BODY_SIZE, 0.3);
+const enemyHeadGeo = new THREE.BoxGeometry(ENEMY_HEAD_SIZE, ENEMY_HEAD_SIZE, 0.3);
+const enemyEdgeBodyGeo = new THREE.EdgesGeometry(enemyBodyGeo);
+const enemyEdgeHeadGeo = new THREE.EdgesGeometry(enemyHeadGeo);
+
+function makeEnemy(opts = {}) {
+  const group = new THREE.Group();
+  const headScale = opts.headScale ?? 1;
+
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.targetColor),
+    emissive: new THREE.Color(0x666666),
+    emissiveIntensity: 1.0, metalness: 0.1, roughness: 0.5
+  });
+  const body = new THREE.Mesh(enemyBodyGeo, bodyMat);
+  body.castShadow = true;
+  body.userData.part = 'body';
+  group.add(body);
+  body.add(new THREE.LineSegments(enemyEdgeBodyGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.headColor),
+    emissive: new THREE.Color(0xaa3030),
+    emissiveIntensity: 1.0, metalness: 0.1, roughness: 0.5
+  });
+  const head = new THREE.Mesh(enemyHeadGeo, headMat);
+  head.position.y = (ENEMY_BODY_SIZE + ENEMY_HEAD_SIZE * headScale) / 2 + 0.04;
+  head.scale.set(headScale, headScale, 1);
+  head.castShadow = true;
+  head.userData.part = 'head';
+  group.add(head);
+  head.add(new THREE.LineSegments(enemyEdgeHeadGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  const e = {
+    group, body, head, bodyMat, headMat,
+    vx: 0, vy: 0,
+    hp: 2, hpMax: 2,
+    dirChangeTimer: 0,
+    flashUntil: 0
+  };
+  scene.add(group);
+  enemies.push(e);
+  attachHpBar(e);
+  return e;
+}
+
+function clearEnemies() {
+  for (const e of enemies) {
+    scene.remove(e.group);
+    if (e.hpBarEl) e.hpBarEl.remove();
+  }
+  enemies.length = 0;
+}
+
+function attachHpBar(e) {
+  const div = document.createElement('div');
+  div.className = 'world-hpbar';
+  div.innerHTML = '<div class="fill"></div>';
+  hpBarLayer.appendChild(div);
+  e.hpBarEl = div;
+  e.hpBarFillEl = div.firstElementChild;
+}
+
+const _projVec = new THREE.Vector3();
+function updateHpBars() {
+  if (enemies.length === 0) return;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  for (const e of enemies) {
+    if (!e.hpBarEl) continue;
+    // Hide bar when target is dead/respawning or at full HP
+    if (e.respawnAt || !e.group.visible || e.hp >= e.hpMax) {
+      if (e.hpBarEl.classList.contains('show')) e.hpBarEl.classList.remove('show');
+      continue;
+    }
+    // World position above the head
+    const headOffset = e.cylinder
+      ? (CYL_BODY_HEIGHT / 2 + CYL_HEAD_RADIUS * 2 + 0.2)
+      : ((ENEMY_BODY_SIZE + ENEMY_HEAD_SIZE) / 2 + ENEMY_HEAD_SIZE / 2 + 0.25);
+    _projVec.set(
+      e.group.position.x,
+      e.group.position.y + headOffset,
+      e.group.position.z
+    );
+    _projVec.project(camera);
+    if (_projVec.z > 1 || _projVec.z < -1) {
+      e.hpBarEl.classList.remove('show');
+      continue;
+    }
+    const x = (_projVec.x * 0.5 + 0.5) * w;
+    const y = (-_projVec.y * 0.5 + 0.5) * h;
+    e.hpBarEl.style.left = x + 'px';
+    e.hpBarEl.style.top = y + 'px';
+    const pct = Math.max(0, Math.min(1, e.hp / e.hpMax)) * 100;
+    e.hpBarFillEl.style.width = pct + '%';
+    e.hpBarEl.classList.add('show');
+  }
+}
+
+function placeEnemyOnPanel(e) {
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
+  const halfH = ((PANEL_TOP - PANEL_BOTTOM) - ENEMY_BODY_SIZE - ENEMY_HEAD_SIZE) / 2;
+  e.group.position.set(
+    (Math.random() * 2 - 1) * halfW,
+    PANEL_Y - ENEMY_HEAD_SIZE / 2 + (Math.random() * 2 - 1) * halfH,
+    ENEMY_Z
+  );
+  const diff = currentDifficulty();
+  const speed = (2.4 + Math.random() * 2.0) * diff.speedMul;
+  const angle = Math.random() * Math.PI * 2;
+  e.vx = Math.cos(angle) * speed;
+  e.vy = Math.sin(angle) * speed * 0.55;
+  e.hp = e.hpMax;
+  e.dirChangeTimer = diff.dirChangeMs * (0.5 + Math.random());
+  playSpawnAt(e.group.position.x, e.group.position.y, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y, e.group.position.z);
+}
+
+function placeEnemyAroundPlayer(e) {
+  // Random sphere around the player at radius 6-12, at varied heights
+  const angle = Math.random() * Math.PI * 2;
+  const r = 6 + Math.random() * 6;
+  e.group.position.set(
+    Math.sin(angle) * r,
+    1.4 + Math.random() * 2.4,
+    -Math.cos(angle) * r
+  );
+  // Face the player center
+  e.group.lookAt(0, 1.6, 0);
+  e.group.rotation.x = 0;
+  e.hp = e.hpMax;
+  playSpawnAt(e.group.position.x, e.group.position.y, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y, e.group.position.z);
+}
+
+function updateEnemies(dt) {
+  if (mode !== 'tracking') return;
+  const diff = currentDifficulty();
+  const halfW = PANEL_HALF_W - ENEMY_BODY_SIZE / 2 - 0.2;
+  const lowerY = PANEL_BOTTOM + ENEMY_BODY_SIZE / 2 + 0.1;
+  const upperY = PANEL_TOP - ENEMY_HEAD_SIZE - ENEMY_BODY_SIZE / 2 - 0.1;
+  for (const e of enemies) {
+    if (diff.dirChangeMs > 0) {
+      e.dirChangeTimer -= dt * 1000;
+      if (e.dirChangeTimer <= 0) {
+        const cur = Math.atan2(e.vy, e.vx);
+        const speed = Math.hypot(e.vx, e.vy);
+        const turn = (Math.random() - 0.5) * Math.PI * 0.8;
+        e.vx = Math.cos(cur + turn) * speed;
+        e.vy = Math.sin(cur + turn) * speed;
+        e.dirChangeTimer = diff.dirChangeMs * (0.5 + Math.random());
+      }
+    }
+    e.group.position.x += e.vx * dt;
+    e.group.position.y += e.vy * dt;
+    if (e.group.position.x >  halfW) { e.group.position.x =  halfW; e.vx = -e.vx; }
+    if (e.group.position.x < -halfW) { e.group.position.x = -halfW; e.vx = -e.vx; }
+    if (e.group.position.y > upperY) { e.group.position.y = upperY; e.vy = -e.vy; }
+    if (e.group.position.y < lowerY) { e.group.position.y = lowerY; e.vy = -e.vy; }
+  }
+}
+
+function refreshEnemyColors() {
+  for (const e of enemies) {
+    e.bodyMat.color.set(Settings.targetColor);
+    e.headMat.color.set(Settings.headColor);
+  }
+}
+
+// ============================================================================
+// Cylinder targets (kiting AI for "Pursuer" mode)
+// ============================================================================
+const CYL_BODY_RADIUS = 0.32;
+const CYL_BODY_HEIGHT = 1.6;
+const CYL_HEAD_RADIUS = 0.30;
+const CYLINDER_HP = 4;
+
+const cylBodyGeo = new THREE.CylinderGeometry(CYL_BODY_RADIUS, CYL_BODY_RADIUS, CYL_BODY_HEIGHT, 18);
+const cylHeadGeo = new THREE.SphereGeometry(CYL_HEAD_RADIUS, 18, 14);
+
+function makeCylinder() {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.targetColor),
+    emissive: new THREE.Color(0x666666),
+    emissiveIntensity: 1.0, metalness: 0.2, roughness: 0.5
+  });
+  const body = new THREE.Mesh(cylBodyGeo, bodyMat);
+  body.castShadow = true;
+  body.userData.part = 'body';
+  group.add(body);
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.headColor),
+    emissive: new THREE.Color(0xaa3030),
+    emissiveIntensity: 1.0, metalness: 0.1, roughness: 0.5
+  });
+  const head = new THREE.Mesh(cylHeadGeo, headMat);
+  // Connect head to body — overlap slightly so there's no visible gap
+  head.position.y = CYL_BODY_HEIGHT / 2 + CYL_HEAD_RADIUS - 0.08;
+  head.castShadow = true;
+  head.userData.part = 'head';
+  group.add(head);
+
+  const e = {
+    group, body, head, bodyMat, headMat,
+    vx: 0, vz: 0,
+    hp: CYLINDER_HP, hpMax: CYLINDER_HP,
+    strafeDir: Math.random() < 0.5 ? -1 : 1,
+    strafeTimer: 0.5 + Math.random() * 1.5,
+    flashUntil: 0,
+    cylinder: true
+  };
+  scene.add(group);
+  enemies.push(e);
+  attachHpBar(e);
+  return e;
+}
+
+// ============================================================================
+// Pole target (Pole Practice mode — invincible thin pole at room center)
+// ============================================================================
+const POLE_RADIUS = 0.18;
+const POLE_HEIGHT = 2.6;
+const poleGeo = new THREE.CylinderGeometry(POLE_RADIUS, POLE_RADIUS, POLE_HEIGHT, 18);
+
+function makePole() {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.targetColor),
+    emissive: new THREE.Color(0x666666),
+    emissiveIntensity: 1.0, metalness: 0.2, roughness: 0.5
+  });
+  const body = new THREE.Mesh(poleGeo, bodyMat);
+  body.castShadow = true;
+  body.userData.part = 'body';
+  group.add(body);
+
+  // Locked to room center
+  group.position.set(0, POLE_HEIGHT / 2, 0);
+
+  const e = {
+    group, body, head: null, bodyMat,
+    headMat: null,
+    vx: 0, vz: 0,
+    hp: Infinity, hpMax: Infinity,
+    flashUntil: 0,
+    pole: true
+  };
+  scene.add(group);
+  enemies.push(e);
+  // Pole skips attachHpBar — invincible, no need
+  return e;
+}
+
+function placeCylinder(e) {
+  // Spawn at random angle around player at far edge
+  const angle = Math.random() * Math.PI * 2;
+  const r = 9 + Math.random() * 3;
+  e.group.position.set(
+    camera.position.x + Math.sin(angle) * r,
+    CYL_BODY_HEIGHT / 2,
+    camera.position.z - Math.cos(angle) * r
+  );
+  // Clamp to room
+  const lim = ROOM_HALF - 1;
+  e.group.position.x = Math.max(-lim, Math.min(lim, e.group.position.x));
+  e.group.position.z = Math.max(-lim, Math.min(lim, e.group.position.z));
+  e.hp = e.hpMax;
+  e.strafeDir = Math.random() < 0.5 ? -1 : 1;
+  e.strafeTimer = 0.6 + Math.random() * 1.4;
+  e.vx = 0; e.vz = 0;
+  playSpawnAt(e.group.position.x, e.group.position.y + CYL_BODY_HEIGHT / 2, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y + CYL_BODY_HEIGHT / 2, e.group.position.z);
+}
+
+function updateCylinders(dt) {
+  if (mode !== 'cylinder') return;
+  const diff = currentDifficulty();
+  const baseSpeed = 4.5 * diff.speedMul;
+  const targetDist = 7;
+  const lim = ROOM_HALF - 1;
+  for (const e of enemies) {
+    if (!e.cylinder) continue;
+    const dx = e.group.position.x - camera.position.x;
+    const dz = e.group.position.z - camera.position.z;
+    const dist = Math.hypot(dx, dz) || 0.001;
+
+    // Radial: approach if too far, retreat if too close
+    let radial = 0;
+    if (dist > targetDist + 1.2) radial = -baseSpeed * 0.7;
+    else if (dist < targetDist - 1.2) radial = baseSpeed * 0.7;
+
+    // Tangential strafe with periodic direction flips
+    e.strafeTimer -= dt;
+    if (e.strafeTimer <= 0) {
+      e.strafeDir *= -1;
+      e.strafeTimer = (0.6 + Math.random() * 1.0) * (1 / Math.max(0.5, diff.speedMul));
+      // Reactivity sample: only count if player was meaningfully tracking pre-flip
+      const preSign = Math.abs(mouseXSmooth) > MOUSE_SIGN_THRESH ? Math.sign(mouseXSmooth) : 0;
+      if (preSign !== 0) {
+        pursuerReactStart = performance.now();
+        pursuerReactPhase = 1;
+        pursuerReactFromSign = preSign;
+        pursuerReactPreMag = Math.abs(mouseXSmooth);
+      } else {
+        pursuerReactPhase = 0;
+      }
+    }
+
+    const ux = dx / dist, uz = dz / dist;
+    const tx = -uz, tz = ux;
+    e.vx = ux * radial + tx * e.strafeDir * baseSpeed;
+    e.vz = uz * radial + tz * e.strafeDir * baseSpeed;
+
+    e.group.position.x += e.vx * dt;
+    e.group.position.z += e.vz * dt;
+
+    // Bounce off room bounds
+    if (e.group.position.x >  lim) { e.group.position.x =  lim; e.strafeDir *= -1; }
+    if (e.group.position.x < -lim) { e.group.position.x = -lim; e.strafeDir *= -1; }
+    if (e.group.position.z >  lim) { e.group.position.z =  lim; e.strafeDir *= -1; }
+    if (e.group.position.z < -lim) { e.group.position.z = -lim; e.strafeDir *= -1; }
+  }
+}
+
+// ============================================================================
+// Difficulty
+// ============================================================================
+const DIFFICULTY = {
+  easy:   { speedMul: 0.85, headScale: 1.2, dirChangeMs: 2500 },
+  normal: { speedMul: 1.2,  headScale: 1.0, dirChangeMs: 1800 },
+  hard:   { speedMul: 1.8,  headScale: 0.7, dirChangeMs: 1200 }
+};
+function currentDifficulty() { return DIFFICULTY[Settings.difficulty] || DIFFICULTY.normal; }
+
+function pickPursuerDuration() {
+  const p = Settings.pursuerPattern || 'varied';
+  if (p === 'short')  return 0.6 + Math.random() * 0.4;  // 0.6–1.0s
+  if (p === 'medium') return 1.2 + Math.random() * 0.6;  // 1.2–1.8s
+  if (p === 'long')   return 2.0 + Math.random() * 0.8;  // 2.0–2.8s
+  // varied: full range
+  return 0.6 + Math.random() * 2.2;                       // 0.6–2.8s
+}
+
+function playFlipBeep() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(880, t);
+  g.gain.setValueAtTime(0.12 * vol(), t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(t); o.stop(t + 0.09);
+}
+
+// ============================================================================
+// Skybox presets
+// ============================================================================
+const SKYBOX_PRESETS = {
+  void:     { color: 0x000000, fog: 0x000000 },
+  range:    { color: 0x05060a, fog: 0x05060a },
+  daylight: { color: 0x87CEEB, fog: 0x87CEEB },
+  sunset:   { color: 0xff6b35, fog: 0xff8855 },
+  twilight: { color: 0x2c1b47, fog: 0x1a1030 },
+  space:    { color: 0x010108, fog: 0x010108 }
+};
+function applySkybox() {
+  const p = SKYBOX_PRESETS[Settings.skybox] || SKYBOX_PRESETS.range;
+  scene.background = new THREE.Color(p.color);
+  scene.fog.color.set(p.fog);
+}
+
+// ============================================================================
+// Crosshair (canvas)
+// ============================================================================
+const xhairCtx = crosshair.getContext('2d');
+const xhairPreviewCanvas = $('crosshair-preview-canvas');
+const xhairPreviewCtx = xhairPreviewCanvas.getContext('2d');
+
+function drawCrosshair(ctx, w, h) {
+  const c = Settings.crosshair;
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2;
+  ctx.lineWidth = c.thickness;
+  ctx.strokeStyle = c.color;
+  ctx.lineCap = 'butt';
+
+  function strokeWithOutline(drawFn) {
+    if (c.outline) {
+      ctx.save();
+      ctx.lineWidth = c.thickness + 2;
+      ctx.strokeStyle = '#000';
+      drawFn();
+      ctx.restore();
+    }
+    drawFn();
+  }
+
+  if (c.style === 'cross' || c.style === 't') {
+    strokeWithOutline(() => {
+      ctx.beginPath();
+      // Left
+      ctx.moveTo(cx - c.gap - c.size, cy);
+      ctx.lineTo(cx - c.gap, cy);
+      // Right
+      ctx.moveTo(cx + c.gap, cy);
+      ctx.lineTo(cx + c.gap + c.size, cy);
+      // Top
+      ctx.moveTo(cx, cy - c.gap - c.size);
+      ctx.lineTo(cx, cy - c.gap);
+      // Bottom (skip for T)
+      if (c.style !== 't') {
+        ctx.moveTo(cx, cy + c.gap);
+        ctx.lineTo(cx, cy + c.gap + c.size);
+      }
+      ctx.stroke();
+    });
+  } else if (c.style === 'circle') {
+    strokeWithOutline(() => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, c.size + c.gap, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+  }
+
+  if (c.dot) {
+    if (c.outline) {
+      ctx.beginPath();
+      ctx.fillStyle = '#000';
+      ctx.arc(cx, cy, c.dotSize + 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.fillStyle = c.dotColor;
+    ctx.arc(cx, cy, c.dotSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function renderCrosshair() {
+  drawCrosshair(xhairCtx, crosshair.width, crosshair.height);
+  drawCrosshair(xhairPreviewCtx, xhairPreviewCanvas.width, xhairPreviewCanvas.height);
+}
+crosshair.width = 120;
+crosshair.height = 120;
+
+// ============================================================================
+// FPS counter
+// ============================================================================
+let frameCount = 0;
+let fpsLastUpdate = performance.now();
+function updateFps(now) {
+  frameCount++;
+  if (now - fpsLastUpdate >= 500) {
+    const fps = Math.round(frameCount * 1000 / (now - fpsLastUpdate));
+    fpsCounter.textContent = fps + ' FPS';
+    fpsCounter.classList.toggle('warn', fps < 90 && fps >= 50);
+    fpsCounter.classList.toggle('bad', fps < 50);
+    fpsLastUpdate = now;
+    frameCount = 0;
+  }
+}
+
+// ============================================================================
+// Resize
+// ============================================================================
+function resize() {
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============================================================================
+// Pointer Lock + mouse look
+// ============================================================================
+let pointerLocked = false;
+
+function requestLock() {
+  canvasEl.requestPointerLock?.();
+}
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvasEl;
+  if (!pointerLocked && gameActive && !calibrating) {
+    pauseGame();
+  }
 });
 
-// Menu buttons
-document.getElementById('btn-classic').onclick = () => startGame('classic');
-document.getElementById('btn-endurance').onclick = () => startGame('endurance');
-document.getElementById('btn-zen').onclick = () => startGame('zen');
-document.getElementById('btn-retry').onclick = () => startGame(mode);
-document.getElementById('btn-menu').onclick = showMenu;
+let calibrating = false;
+let calYawTotal = 0;
 
-function showMenu() {
-  overlay.classList.remove('show');
-  gameDiv.style.display = 'none';
-  menu.style.display = 'flex';
-  stopTimer();
+document.addEventListener('mousemove', (e) => {
+  if (!pointerLocked) return;
+  if (calibrating) {
+    calYawTotal += Math.abs(e.movementX);
+    calLiveDisplay();
+    return;
+  }
+  yaw   -= e.movementX * radPerCount;
+  pitch -= e.movementY * radPerCount;
+  if (pitch >  PITCH_LIMIT) pitch =  PITCH_LIMIT;
+  if (pitch < -PITCH_LIMIT) pitch = -PITCH_LIMIT;
+
+  // Smooth movementX for reactivity tracking
+  mouseXSmooth = mouseXSmooth * (1 - MOUSE_SMOOTH_ALPHA) + e.movementX * MOUSE_SMOOTH_ALPHA;
+
+  if (pursuerReactPhase > 0 && gameActive && mode === 'cylinder') {
+    if (pursuerReactPhase === 1) {
+      // Notice phase: waiting for player to start braking (magnitude in old direction drops)
+      const magInOld = mouseXSmooth * pursuerReactFromSign;
+      if (magInOld < pursuerReactPreMag * 0.5) {
+        pursuerReactNoticeAt = performance.now();
+        pursuerReactPhase = 2;
+      }
+    } else if (pursuerReactPhase === 2) {
+      // Flick phase: waiting for sign to fully flip
+      const sign = Math.abs(mouseXSmooth) > MOUSE_SIGN_THRESH ? Math.sign(mouseXSmooth) : 0;
+      if (sign !== 0 && sign !== pursuerReactFromSign) {
+        const now2 = performance.now();
+        const noticePart = pursuerReactNoticeAt - pursuerReactStart;
+        const flickPart  = now2 - pursuerReactNoticeAt;
+        const total = now2 - pursuerReactStart;
+        if (total >= 30 && total <= 1500 && noticePart >= 0 && flickPart >= 0) {
+          pursuerReactiveSamples.push(noticePart);
+          pursuerCorrectSamples.push(flickPart);
+        }
+        pursuerReactPhase = 0;
+      }
+    }
+  }
+});
+
+// Click handling
+let mouseDown = false;
+let lastFireTime = 0;
+canvasEl.addEventListener('mousedown', (e) => {
+  if (!gameActive) return;
+  if (gamePaused) { resumeGame(); return; }
+  if (!pointerLocked) { requestLock(); return; }
+  mouseDown = true;
+  shoot();
+  lastFireTime = performance.now();
+});
+window.addEventListener('mouseup', () => { mouseDown = false; });
+
+// Keyboard
+document.addEventListener('keydown', (e) => {
+  if (calibrating) {
+    if (e.code === 'Space') { e.preventDefault(); finishCalibration(true); }
+    else if (e.code === 'Escape') finishCalibration(false);
+    return;
+  }
+  keys[e.code] = true;
+
+  if (e.code === 'KeyF') { e.preventDefault(); toggleFullscreen(); }
+  else if (e.code === 'KeyR' && mode) { e.preventDefault(); startGame(mode); }
+  else if (e.code === 'Digit1') { e.preventDefault(); setWeapon('hitscan'); }
+  else if (e.code === 'Digit2') { e.preventDefault(); setWeapon('tracking'); }
+  else if (e.code === 'Escape' && gameActive) {
+    if (gamePaused) { quitToMenu(); }
+    else { pauseGame(); }
+  }
+});
+document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+// ============================================================================
+// Weapon HUD + switching
+// ============================================================================
+function syncWeaponHud() {
+  for (const slot of weaponHud.querySelectorAll('.weapon-slot')) {
+    slot.classList.toggle('active', slot.dataset.w === Settings.weapon);
+  }
+}
+function setWeapon(name) {
+  if (!WEAPONS[name]) return;
+  Settings.weapon = name;
+  saveSettings();
+  syncWeaponHud();
+  // Also sync UI selects so they stay consistent
+  const sel1 = $('set-weapon');
+  if (sel1) sel1.value = name;
+  const sel2 = $('menu-weapon-select');
+  if (sel2) sel2.value = name;
+}
+for (const slot of weaponHud.querySelectorAll('.weapon-slot')) {
+  slot.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    setWeapon(slot.dataset.w);
+  });
 }
 
-function startGame(m) {
-  mode = m;
-  score = 0;
-  gameActive = true;
-  overlay.classList.remove('show');
-  menu.style.display = 'none';
-  gameDiv.style.display = 'flex';
-  gameDiv.style.flexDirection = 'column';
-  gameDiv.style.alignItems = 'center';
-  scoreDisplay.textContent = 'Score: 0';
-  stopTimer();
+// ============================================================================
+// Movement (snappy FPS-feel: high accel, quick stop)
+// ============================================================================
+const MOVE_ACCEL = 60;     // m/s² (snappy)
+const MOVE_FRICTION = 14;  // friction when no input
 
-  // Timer setup
-  if (mode === 'classic') {
-    timerDisplay.style.display = 'inline';
-    startTime = Date.now();
-    timerInterval = setInterval(updateClassicTimer, 50);
-  } else if (mode === 'endurance') {
-    timerDisplay.style.display = 'inline';
-    timeLeft = ENDURANCE_TIME;
-    timerDisplay.textContent = 'Time: ' + ENDURANCE_TIME.toFixed(1);
-    startTime = Date.now();
-    timerInterval = setInterval(updateEnduranceTimer, 50);
+function updateMovement(dt) {
+  const movementMode = (mode === 'dodge' || mode === 'cylinder' || mode === 'pole');
+  if (!movementMode || !gameActive || gamePaused) {
+    playerVel.set(0, 0, 0);
+    return;
+  }
+
+  // Build wish direction in world space (yaw-based)
+  const forwardX = -Math.sin(yaw);
+  const forwardZ = -Math.cos(yaw);
+  const rightX   =  Math.cos(yaw);
+  const rightZ   = -Math.sin(yaw);
+
+  let wx = 0, wz = 0;
+  if (keys['KeyW']) { wx += forwardX; wz += forwardZ; }
+  if (keys['KeyS']) { wx -= forwardX; wz -= forwardZ; }
+  if (keys['KeyD']) { wx += rightX;   wz += rightZ; }
+  if (keys['KeyA']) { wx -= rightX;   wz -= rightZ; }
+
+  const wishLen = Math.hypot(wx, wz);
+  const maxSpeed = Settings.walkSpeed;
+
+  if (wishLen > 0) {
+    wx /= wishLen; wz /= wishLen;
+    const targetVx = wx * maxSpeed;
+    const targetVz = wz * maxSpeed;
+    const dvx = targetVx - playerVel.x;
+    const dvz = targetVz - playerVel.z;
+    const dlen = Math.hypot(dvx, dvz);
+    const maxStep = MOVE_ACCEL * dt;
+    if (dlen > 0) {
+      const t = Math.min(1, maxStep / dlen);
+      playerVel.x += dvx * t;
+      playerVel.z += dvz * t;
+    }
   } else {
-    timerDisplay.style.display = 'none';
+    // Friction
+    const speed = Math.hypot(playerVel.x, playerVel.z);
+    if (speed > 0.01) {
+      const drop = speed * MOVE_FRICTION * dt;
+      const newSpeed = Math.max(0, speed - drop);
+      const k = newSpeed / speed;
+      playerVel.x *= k;
+      playerVel.z *= k;
+    } else {
+      playerVel.x = 0; playerVel.z = 0;
+    }
   }
 
-  // Reset tiles
-  blackTiles.clear();
-  placeBlackTiles(NUM_BLACK);
-  renderTiles();
+  camera.position.x += playerVel.x * dt;
+  camera.position.z += playerVel.z * dt;
+
+  // Clamp to room
+  const limit = ROOM_HALF - 0.5;
+  if (camera.position.x >  limit) { camera.position.x =  limit; playerVel.x = 0; }
+  if (camera.position.x < -limit) { camera.position.x = -limit; playerVel.x = 0; }
+  if (camera.position.z >  limit) { camera.position.z =  limit; playerVel.z = 0; }
+  if (camera.position.z < -limit) { camera.position.z = -limit; playerVel.z = 0; }
 }
 
+// ============================================================================
+// Shooting
+// ============================================================================
+const raycaster = new THREE.Raycaster();
+const forward = new THREE.Vector3();
+
+function shoot() {
+  shotsFired++;
+  camera.getWorldDirection(forward);
+  raycaster.set(camera.position, forward);
+
+  const w = currentWeapon();
+  if (mode === 'tracking' || mode === 'dodge' || mode === 'cylinder' || mode === 'pole') {
+    const parts = [];
+    for (const e of enemies) {
+      // Skip enemies that are dead/waiting to respawn
+      if (e.respawnAt || !e.group.visible) continue;
+      parts.push(e.body);
+      if (e.head) parts.push(e.head);
+    }
+    const hits = raycaster.intersectObjects(parts, false);
+    if (hits.length > 0) {
+      const hitObj = hits[0].object;
+      const enemy = enemies.find(en => en.body === hitObj || en.head === hitObj);
+      if (enemy) handleEnemyHit(enemy, hitObj.userData.part);
+    } else {
+      if (w.auto) playTrackingTick(false);
+      else { playMiss(); breakStreak(); }
+    }
+  } else if (mode === 'flicks') {
+    const hits = raycaster.intersectObjects(tileMeshes, false);
+    if (hits.length > 0) handleFlickHit(hits[0].object.userData.index);
+    else { if (w.auto) playTrackingTick(false); else { playMiss(); breakStreak(); } }
+  } else {
+    const hits = raycaster.intersectObjects(tileMeshes, false);
+    if (hits.length > 0) handleTap(hits[0].object.userData.index);
+    else { if (w.auto) playTrackingTick(false); else { playMiss(); breakStreak(); } }
+  }
+  updateAccuracy();
+}
+
+function updateAccuracy() {
+  const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+  accVal.textContent = acc + '%';
+}
+
+function updateStreak() {
+  streakValEl.textContent = streak;
+  streakEl.classList.toggle('hot', streak >= 10);
+}
+function bumpStreak() {
+  streak++;
+  if (streak > bestStreak) bestStreak = streak;
+  updateStreak();
+}
+function breakStreak() {
+  if (streak > 0) { streak = 0; updateStreak(); }
+}
+
+function pulseHitMarker(isHead) {
+  hitMarker.classList.toggle('head', !!isHead);
+  hitMarker.classList.add('show');
+  clearTimeout(pulseHitMarker._t);
+  pulseHitMarker._t = setTimeout(() => hitMarker.classList.remove('show'), 90);
+}
+
+const _dmgVec = new THREE.Vector3();
+function spawnDmgPopup(worldX, worldY, worldZ, text, kind) {
+  _dmgVec.set(worldX, worldY, worldZ);
+  _dmgVec.project(camera);
+  if (_dmgVec.z > 1 || _dmgVec.z < -1) return;
+  const x = (_dmgVec.x * 0.5 + 0.5) * window.innerWidth;
+  const y = (-_dmgVec.y * 0.5 + 0.5) * window.innerHeight;
+  const div = document.createElement('div');
+  div.className = 'dmg-popup' + (kind ? (' ' + kind) : '');
+  div.textContent = text;
+  div.style.left = x + 'px';
+  div.style.top = y + 'px';
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 750);
+}
+
+function rollingAverage(values, window = 5) {
+  const out = [];
+  for (let i = 0; i < values.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    let sum = 0, count = 0;
+    for (let j = start; j <= i; j++) { sum += values[j]; count++; }
+    out.push(sum / count);
+  }
+  return out;
+}
+
+function drawLineChart(canvas, values, color, opts = {}) {
+  const ctx = canvas.getContext('2d');
+  // High-DPI scale
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = cssW, h = cssH;
+  ctx.clearRect(0, 0, w, h);
+  if (values.length === 0) return;
+
+  const padX = 6;
+  const padTop = 6;
+  const padBot = 6;
+  const usableW = w - padX * 2;
+  const usableH = h - padTop - padBot;
+
+  let max = opts.max ?? Math.max(...values);
+  let min = opts.min ?? Math.min(...values);
+  if (max === min) { max += 1; min -= 1; }
+  // pad range slightly
+  const pad = (max - min) * 0.15;
+  max += pad; min -= pad;
+  if (opts.fixedMin !== undefined) min = opts.fixedMin;
+  if (opts.fixedMax !== undefined) max = opts.fixedMax;
+  const range = max - min;
+
+  const xStep = values.length > 1 ? usableW / (values.length - 1) : 0;
+
+  // gridlines (4)
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    const y = padTop + i * usableH / 3 + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(padX, y);
+    ctx.lineTo(w - padX, y);
+    ctx.stroke();
+  }
+
+  // path
+  ctx.beginPath();
+  for (let i = 0; i < values.length; i++) {
+    const x = padX + (values.length === 1 ? usableW / 2 : i * xStep);
+    const y = padTop + usableH - ((values[i] - min) / range) * usableH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  // fill underneath
+  const lastX = padX + (values.length === 1 ? usableW / 2 : (values.length - 1) * xStep);
+  ctx.lineTo(lastX, h - padBot);
+  ctx.lineTo(padX + (values.length === 1 ? usableW / 2 : 0), h - padBot);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, padTop, 0, h - padBot);
+  grad.addColorStop(0, color + '55');
+  grad.addColorStop(1, color + '00');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line stroke
+  ctx.beginPath();
+  for (let i = 0; i < values.length; i++) {
+    const x = padX + (values.length === 1 ? usableW / 2 : i * xStep);
+    const y = padTop + usableH - ((values[i] - min) / range) * usableH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // points
+  for (let i = 0; i < values.length; i++) {
+    const x = padX + (values.length === 1 ? usableW / 2 : i * xStep);
+    const y = padTop + usableH - ((values[i] - min) / range) * usableH;
+    const isLast = i === values.length - 1;
+    ctx.beginPath();
+    ctx.fillStyle = isLast ? '#fff' : color;
+    ctx.arc(x, y, isLast ? 4 : 2, 0, Math.PI * 2);
+    ctx.fill();
+    if (isLast) {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // Optional overlay line (e.g. rolling average), drawn dashed in a separate color
+  if (opts.overlay && opts.overlay.length === values.length) {
+    ctx.beginPath();
+    for (let i = 0; i < opts.overlay.length; i++) {
+      const x = padX + (opts.overlay.length === 1 ? usableW / 2 : i * xStep);
+      const y = padTop + usableH - ((opts.overlay[i] - min) / range) * usableH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = opts.overlayColor || '#fbbf24cc';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function showHsToast() {
+  hsToast.textContent = 'HEADSHOT';
+  hsToast.classList.add('show');
+  clearTimeout(showHsToast._t);
+  showHsToast._t = setTimeout(() => hsToast.classList.remove('show'), 350);
+}
+
+function handleEnemyHit(enemy, part) {
+  shotsHit++;
+  bumpStreak();
+  const isHead = part === 'head';
+  const w = currentWeapon();
+
+  // Pole Practice: pole is invincible — every hit is +1 raw, dodge-bar multiplier accumulated
+  if (enemy.pole) {
+    pulseHitMarker(false);
+    enemy.flashUntil = performance.now() + 90;
+    score += 1;
+    multiplierSum += dodgeMul;
+    scoreVal.textContent = score;
+    playHit(false);
+    return;
+  }
+
+  const dmg = isHead ? w.dmgHead : w.dmgBody;
+  enemy.hp -= dmg;
+  enemy.flashUntil = performance.now() + 90;
+  pulseHitMarker(isHead);
+
+  if (enemy.hp <= 0) {
+    score += 1;
+    if (isHead) headshots++;
+    let mul = 1;
+    if (mode === 'dodge') mul = dodgeMul;
+    else if (mode === 'cylinder') mul = pursuerMul;
+    multiplierSum += mul;
+    scoreVal.textContent = score;
+    playHit(isHead);
+    if (isHead) showHsToast();
+
+    if (mode === 'tracking') scheduleRespawn(enemy, 'tracking');
+    else if (mode === 'dodge') scheduleRespawn(enemy, 'dodge');
+    else if (mode === 'cylinder') scheduleRespawn(enemy, 'cylinder');
+  } else if (w.auto) {
+    playTrackingTick(true);
+  } else {
+    HitSounds[Settings.hitsound]?.(0.7);
+  }
+}
+
+// Schedule a respawn 500ms after kill — hides target and triggers placement when timer elapses
+function scheduleRespawn(enemy, modeKind) {
+  enemy.group.visible = false;
+  enemy.respawnAt = performance.now() + 500;
+  enemy.respawnMode = modeKind;
+}
+
+// Static / classic / endurance / zen tap
 function placeBlackTiles(count, exclude = -1) {
-  const whiteTiles = [];
+  const whites = [];
   for (let i = 0; i < GRID_SIZE; i++) {
-    if (!blackTiles.has(i) && i !== exclude) whiteTiles.push(i);
+    if (!blackTiles.has(i) && i !== exclude) whites.push(i);
   }
-  for (let j = 0; j < count && whiteTiles.length > 0; j++) {
-    const idx = Math.floor(Math.random() * whiteTiles.length);
-    blackTiles.add(whiteTiles[idx]);
-    whiteTiles.splice(idx, 1);
+  for (let j = 0; j < count && whites.length > 0; j++) {
+    const idx = Math.floor(Math.random() * whites.length);
+    blackTiles.add(whites[idx]);
+    whites.splice(idx, 1);
   }
 }
 
-function renderTiles() {
-  for (let i = 0; i < GRID_SIZE; i++) {
-    tiles[i].className = 'tile ' + (blackTiles.has(i) ? 'black' : 'white');
-  }
+function flashTile(index, color) {
+  tileAnim[index].flashColor = color;
+  tileAnim[index].flashUntil = performance.now() + 120;
 }
 
 function handleTap(index) {
   if (!gameActive) return;
-
   if (blackTiles.has(index)) {
-    // Correct tap
-    score++;
-    scoreDisplay.textContent = 'Score: ' + score;
+    shotsHit++; score++;
+    multiplierSum += 1;
+    bumpStreak();
+    pulseHitMarker(false);
+    scoreVal.textContent = score;
     blackTiles.delete(index);
-    tiles[index].classList.add('flash-green');
-    setTimeout(() => tiles[index].classList.remove('flash-green'), 80);
+    tileAnim[index].press = 0.18;
+    flashTile(index, COLOR_GREEN);
     placeBlackTiles(1, index);
-    renderTiles();
-
-    if (mode === 'classic' && score >= CLASSIC_TARGET) {
-      gameOver(true);
-    }
+    playHit(false);
+    if (mode === 'classic' && score >= CLASSIC_TARGET) gameOver(true);
   } else {
-    // Wrong tap — hit white tile
-    tiles[index].classList.add('flash-red');
+    flashTile(index, COLOR_RED);
+    tileAnim[index].press = 0.12;
+    playMiss();
+    breakStreak();
     gameOver(false);
   }
 }
 
-function updateClassicTimer() {
-  const elapsed = (Date.now() - startTime) / 1000;
-  timerDisplay.textContent = 'Time: ' + elapsed.toFixed(2);
-}
-
-function updateEnduranceTimer() {
-  const elapsed = (Date.now() - startTime) / 1000;
-  timeLeft = ENDURANCE_TIME - elapsed;
-  if (timeLeft <= 0) {
-    timeLeft = 0;
-    timerDisplay.textContent = 'Time: 0.0';
-    gameOver(true);
-    return;
-  }
-  timerDisplay.textContent = 'Time: ' + timeLeft.toFixed(1);
-}
-
-function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
+// Flicks: only one tile is active at a time, hit it = +1, spawn elsewhere; miss = no penalty
+function handleFlickHit(index) {
+  if (!gameActive) return;
+  if (blackTiles.has(index)) {
+    shotsHit++; score++;
+    multiplierSum += 1;
+    bumpStreak();
+    pulseHitMarker(false);
+    scoreVal.textContent = score;
+    blackTiles.delete(index);
+    tileAnim[index].press = 0.18;
+    flashTile(index, COLOR_GREEN);
+    placeBlackTiles(1, index);
+    playHit(false);
+  } else {
+    playMiss();
+    breakStreak();
   }
 }
+
+// ============================================================================
+// Render loop
+// ============================================================================
+let lastTime = performance.now();
+let lastRenderTime = 0;
+const MENU_FRAME_INTERVAL = 1000 / 60; // cap to 60 fps when idle
+function animate(now) {
+  requestAnimationFrame(animate);
+  const idle = !gameActive || gamePaused;
+  if (idle && now - lastRenderTime < MENU_FRAME_INTERVAL) return;
+  lastRenderTime = now;
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  updateFps(now);
+
+  // Input → movement
+  updateMovement(dt);
+
+  // Camera rotation
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // Enemy update
+  if (gameActive && !gamePaused) {
+    if (mode === 'tracking') updateEnemies(dt);
+    else if (mode === 'cylinder') updateCylinders(dt);
+  }
+
+  // Pending respawns (0.5s delay after a kill)
+  if (gameActive && !gamePaused) {
+    for (const e of enemies) {
+      if (e.respawnAt && now >= e.respawnAt) {
+        e.respawnAt = 0;
+        e.group.visible = true;
+        if (e.respawnMode === 'tracking') placeEnemyOnPanel(e);
+        else if (e.respawnMode === 'dodge') placeEnemyAroundPlayer(e);
+        else if (e.respawnMode === 'cylinder') placeCylinder(e);
+      }
+    }
+  }
+
+  // Enemy flash decay
+  for (const e of enemies) {
+    const flashing = now < e.flashUntil;
+    if (flashing) {
+      e.bodyMat.emissive.setRGB(1, 0.3, 0.3);
+      if (e.headMat) e.headMat.emissive.setRGB(1, 0.3, 0.3);
+    } else {
+      e.bodyMat.emissive.setRGB(0.4, 0.4, 0.4);
+      if (e.headMat) e.headMat.emissive.setRGB(0.66, 0.18, 0.18);
+    }
+  }
+
+  // Tile animations
+  const targetEmissive = new THREE.Color(Settings.targetColor).multiplyScalar(0.6);
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const mesh = tileMeshes[i];
+    const anim = tileAnim[i];
+    const isBlack = blackTiles.has(i);
+    const baseZ = isBlack ? 0.12 : 0;
+    const targetZ = PANEL_Z + baseZ - anim.press;
+    mesh.position.z += (targetZ - mesh.position.z) * Math.min(1, dt * 18);
+    if (anim.press > 0) anim.press = Math.max(0, anim.press - dt * 3);
+
+    const flashing = now < anim.flashUntil;
+    if (flashing) {
+      mesh.material.color.copy(anim.flashColor);
+      mesh.material.emissive.copy(anim.flashColor);
+      tileEdges[i].color.copy(anim.flashColor);
+    } else {
+      if (isBlack) {
+        mesh.material.color.set(Settings.targetColor);
+        mesh.material.emissive.copy(targetEmissive);
+      } else {
+        mesh.material.color.copy(COLOR_INACTIVE);
+        mesh.material.emissive.setRGB(0, 0, 0);
+      }
+      tileEdges[i].color.copy(isBlack ? EDGE_BRIGHT : EDGE_DIM);
+    }
+  }
+
+  // World-space HP bars above each enemy
+  updateHpBars();
+
+  // 3D audio listener follows camera
+  updateAudioListener();
+
+  // Auto-fire weapon (tracking) — keep firing while mouse held + locked + active
+  const w = currentWeapon();
+  if (w.auto && mouseDown && pointerLocked && gameActive && !gamePaused) {
+    if (now - lastFireTime >= w.fireInterval) {
+      lastFireTime = now;
+      shoot();
+    }
+  }
+
+  // Pursuer direction-bar update
+  if (mode === 'cylinder' && gameActive && !gamePaused) {
+    pursuerFill += dt / pursuerCurrentDur;
+    if (pursuerFill >= 1) {
+      pursuerFill = 0;
+      pursuerDir = (pursuerDir === 'left') ? 'right' : 'left';
+      pursuerCurrentDur = pickPursuerDuration();
+      pursuerLastFlipTime = now;
+      playFlipBeep();
+    }
+    dirBarFill.style.width = (pursuerFill * 100) + '%';
+    dirBarText.textContent = (pursuerDir === 'left') ? '← STRAFE LEFT' : 'STRAFE RIGHT →';
+
+    const left  = !!keys['KeyA'] && !keys['KeyD'];
+    const right = !!keys['KeyD'] && !keys['KeyA'];
+    const strafeKey = left ? 'left' : (right ? 'right' : 'none');
+
+    // Track when the player changed strafe direction
+    if (strafeKey !== pursuerPrevStrafeKey) {
+      pursuerLastStrafeChangeTime = now;
+      pursuerPrevStrafeKey = strafeKey;
+    }
+
+    const correct = (pursuerDir === strafeKey);
+    const reactionDelay = pursuerLastStrafeChangeTime - pursuerLastFlipTime;
+    const reactiveStrafe = reactionDelay >= REACT_WINDOW_MIN && reactionDelay <= REACT_WINDOW_MAX;
+
+    // Perfect = correct direction AND change happened in reactive window
+    if (correct && reactiveStrafe) pursuerMul = 2;
+    else if (correct)              pursuerMul = 1;
+    else                           pursuerMul = (left || right) ? 0.5 : 0.25;
+
+    dirBar.classList.toggle('perfect', correct && reactiveStrafe);
+    dirBar.classList.toggle('correct', correct && !reactiveStrafe);
+    dirBar.classList.toggle('wrong',   !correct && (left || right));
+  }
+
+  // Dodge / Pole bar update — player-driven fill, switching at the green zone earns max points
+  if ((mode === 'dodge' || mode === 'pole') && gameActive && !gamePaused) {
+    dodgeFill += dt / dodgeDuration;
+
+    const left  = !!keys['KeyA'] && !keys['KeyD'];
+    const right = !!keys['KeyD'] && !keys['KeyA'];
+    const strafeKey = left ? 'left' : (right ? 'right' : 'none');
+
+    if (strafeKey !== dodgePrevStrafeKey && strafeKey !== 'none' && dodgePrevStrafeKey !== 'none') {
+      // Player switched direction — evaluate fill at this moment
+      const f = dodgeFill;
+      let earnedMul;
+      if (f < 0.10)        earnedMul = 0;
+      else if (f < 0.75)   earnedMul = 0.4 + ((f - 0.10) / 0.65) * 1.6;  // 0.4 → 2.0
+      else if (f <= 1.15)  earnedMul = 2.0;                               // wider perfect window
+      else                  earnedMul = 0.4;                              // overshoot
+      dodgeMul = earnedMul;
+      dodgeFill = 0;
+      dodgeDuration = pickPursuerDuration();
+    }
+    dodgePrevStrafeKey = strafeKey;
+
+    // Visual update
+    const visualFill = Math.min(1, dodgeFill);
+    dodgeFillEl.style.width = (visualFill * 100) + '%';
+    const inIdeal = dodgeFill >= 0.75 && dodgeFill <= 1.15;
+    const overshoot = dodgeFill > 1.15;
+    dodgeBar.classList.toggle('ready', inIdeal && !overshoot);
+    dodgeBar.classList.toggle('overshoot', overshoot);
+    dodgeArrow.textContent = 'STRAFE TIMING';
+  }
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+// ============================================================================
+// Game state machine
+// ============================================================================
+let timerInterval = null;
+function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+
+function elapsedSeconds() {
+  if (!startTime) return 0;
+  const now = gamePaused ? pausedAt : Date.now();
+  return (now - startTime - totalPausedMs) / 1000;
+}
+
+function tickTimer() {
+  if (gamePaused) return;
+  const elapsed = elapsedSeconds();
+  if (mode === 'classic') {
+    timerVal.textContent = elapsed.toFixed(2) + 's';
+  } else if (timerDuration > 0) {
+    timeLeft = timerDuration - elapsed;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      timerVal.textContent = '0.0s';
+      gameOver(true);
+      return;
+    }
+    timerVal.textContent = timeLeft.toFixed(1) + 's';
+  }
+}
+
+function showOnly(screen) {
+  for (const s of document.querySelectorAll('.screen')) s.classList.remove('show');
+  if (screen) screen.classList.add('show');
+}
+
+function showMainMenu() {
+  showOnly(menuScreen);
+  hud.classList.add('hide');
+  crosshair.classList.remove('show');
+  streakEl.classList.remove('show');
+  dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
+  weaponHud.classList.remove('show');
+  dodgeRoom.visible = false;
+  backWall.visible = true;
+  for (const t of tileMeshes) t.visible = true;
+  clearEnemies();
+  gameActive = false;
+  gamePaused = false;
+  mode = '';
+  stopTimer();
+  if (document.exitPointerLock) document.exitPointerLock();
+}
+
+function startGame(m) {
+  ensureAudio();
+  mode = m;
+  score = 0; shotsFired = 0; shotsHit = 0; headshots = 0;
+  streak = 0; bestStreak = 0;
+  multiplierSum = 0;
+  updateStreak();
+  gameActive = true;
+  gamePaused = false;
+  yaw = 0;
+  startTime = Date.now();
+  totalPausedMs = 0;
+  pausedAt = 0;
+
+  showOnly(null);
+  hud.classList.remove('hide');
+  crosshair.classList.add('show');
+  streakEl.classList.add('show');
+  scoreVal.textContent = '0';
+  updateAccuracy();
+  updateStreak();
+  stopTimer();
+  clearEnemies();
+  blackTiles.clear();
+  for (let i = 0; i < GRID_SIZE; i++) { tileAnim[i].press = 0; tileAnim[i].flashUntil = 0; }
+
+  // Configure scene per mode
+  dodgeRoom.visible = false;
+  dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
+  weaponHud.classList.add('show');
+  backWall.visible = true;
+  for (const t of tileMeshes) t.visible = true;
+  camera.position.set(0, 1.6, 0);
+  syncWeaponHud();
+
+  // Default: aim camera at panel
+  pitch = Math.atan((PANEL_Y - camera.position.y) / -PANEL_Z);
+
+  if (mode === 'classic' || mode === 'endurance' || mode === 'zen') {
+    placeBlackTiles(NUM_BLACK);
+    timerDuration = (mode === 'endurance') ? ENDURANCE_TIME : 0;
+    timerDisplay.style.display = (mode === 'zen') ? 'none' : 'inline';
+  } else if (mode === 'flicks') {
+    placeBlackTiles(1);
+    timerDuration = FLICKS_DURATION;
+    timerDisplay.style.display = 'inline';
+  } else if (mode === 'tracking') {
+    for (const t of tileMeshes) t.visible = false;
+    const diff = currentDifficulty();
+    const count = Math.max(1, Settings.trackingCount);
+    for (let i = 0; i < count; i++) {
+      const e = makeEnemy({ headScale: diff.headScale });
+      placeEnemyOnPanel(e);
+    }
+    timerDuration = TRACKING_DURATION;
+    timerDisplay.style.display = 'inline';
+  } else if (mode === 'dodge') {
+    for (const t of tileMeshes) t.visible = false;
+    backWall.visible = false;
+    dodgeRoom.visible = true;
+    dodgeBar.classList.add('show');
+    dodgeBar.classList.remove('ready', 'overshoot');
+    pitch = 0;
+    const diff = currentDifficulty();
+    const targetCount = 6;
+    for (let i = 0; i < targetCount; i++) {
+      const e = makeEnemy({ headScale: diff.headScale });
+      placeEnemyAroundPlayer(e);
+    }
+    timerDuration = DODGE_DURATION;
+    timerDisplay.style.display = 'inline';
+    dodgeFill = 0;
+    dodgeDuration = pickPursuerDuration();
+    dodgeMul = 1;
+    dodgePrevStrafeKey = 'none';
+  } else if (mode === 'cylinder') {
+    for (const t of tileMeshes) t.visible = false;
+    backWall.visible = false;
+    dodgeRoom.visible = true;
+    pitch = 0;
+    pursuerDir = Math.random() < 0.5 ? 'left' : 'right';
+    pursuerFill = 0;
+    pursuerMul = 1;
+    pursuerCurrentDur = pickPursuerDuration();
+    pursuerLastFlipTime = performance.now();
+    pursuerLastStrafeChangeTime = -10000;
+    pursuerPrevStrafeKey = 'none';
+    pursuerReactiveSamples = [];
+    pursuerCorrectSamples = [];
+    pursuerReactPhase = 0;
+    dirBar.classList.add('show');
+    dirBar.classList.remove('correct', 'wrong', 'perfect');
+    const e = makeCylinder();
+    placeCylinder(e);
+    timerDuration = CYLINDER_DURATION;
+    timerDisplay.style.display = 'inline';
+  } else if (mode === 'pole') {
+    for (const t of tileMeshes) t.visible = false;
+    backWall.visible = false;
+    dodgeRoom.visible = true;
+    // Position the player back from the pole so they can see and aim at it
+    camera.position.set(0, 1.6, 7);
+    // Pole uses dodge bar (player picks own direction)
+    dodgeBar.classList.add('show');
+    dodgeBar.classList.remove('ready', 'overshoot');
+    dodgeFill = 0;
+    dodgeDuration = pickPursuerDuration();
+    dodgeMul = 1;
+    dodgePrevStrafeKey = 'none';
+    makePole();
+    // Eye level (1.6) is already on the pole — straight ahead is centered
+    pitch = 0;
+    timerDuration = CYLINDER_DURATION;
+    timerDisplay.style.display = 'inline';
+  }
+
+  if (timerDuration > 0 || mode === 'classic') {
+    timerInterval = setInterval(tickTimer, 50);
+  }
+
+  requestLock();
+}
+
+function pauseGame() {
+  if (!gameActive || gamePaused) return;
+  gamePaused = true;
+  pausedAt = Date.now();
+  if (document.exitPointerLock) document.exitPointerLock();
+  // Update stats display
+  $('pause-score').textContent = score;
+  $('pause-time').textContent = mode === 'classic' ? elapsedSeconds().toFixed(2) : (timerDuration > 0 ? timeLeft.toFixed(1) + 's' : elapsedSeconds().toFixed(1));
+  const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+  $('pause-acc').textContent = acc + '%';
+  if (mode === 'cylinder' && pursuerReactiveSamples.length > 0) {
+    const n = pursuerReactiveSamples.length;
+    const avgN = Math.round(pursuerReactiveSamples.reduce((a,b)=>a+b,0) / n);
+    const avgF = Math.round(pursuerCorrectSamples.reduce((a,b)=>a+b,0) / n);
+    $('pause-hits').textContent = `${avgN}+${avgF}ms`;
+  } else {
+    $('pause-hits').textContent = shotsHit + '/' + shotsFired;
+  }
+  showOnly(pauseScreen);
+}
+
+function resumeGame() {
+  if (!gamePaused) return;
+  totalPausedMs += Date.now() - pausedAt;
+  gamePaused = false;
+  showOnly(null);
+  requestLock();
+}
+
+function quitToMenu() { showMainMenu(); }
 
 function gameOver(won) {
   gameActive = false;
   stopTimer();
+  if (document.exitPointerLock) document.exitPointerLock();
+  crosshair.classList.remove('show');
+  streakEl.classList.remove('show');
+  hud.classList.add('hide');
+  dodgeBar.classList.remove('show');
+  dirBar.classList.remove('show');
+  weaponHud.classList.remove('show');
 
-  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+  const elapsed = elapsedSeconds().toFixed(2);
+  const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
+
+  // Apply movement multiplier to compute weighted final score
+  const avgMul = score > 0 ? (multiplierSum / score) : 1;
+  const weightedFinal = Math.round(multiplierSum);
+  const usesMul = (mode === 'dodge' || mode === 'cylinder' || mode === 'pole');
+
+  let bestKey, bestVal, lower = false;
+  let title = 'Game Over';
+  let titleClass = '';
+  let headline = score;
+  let headSub = 'Score';
 
   if (mode === 'classic' && won) {
-    overTitle.textContent = 'Complete!';
-    overScore.textContent = CLASSIC_TARGET + ' tiles in ' + elapsed + 's';
-    overTime.textContent = '';
-    updateBest('classic', parseFloat(elapsed), true);
+    title = 'Complete'; titleClass = 'complete';
+    headline = elapsed + 's'; headSub = `${CLASSIC_TARGET} Targets`;
+    bestKey = 'classic'; bestVal = parseFloat(elapsed); lower = true;
+  } else if (mode === 'classic' && !won) {
+    title = 'Failed'; titleClass = 'failed';
+    headline = score; headSub = 'Targets Hit';
   } else if (mode === 'endurance' && won) {
-    overTitle.textContent = 'You Survived!';
-    overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'You lasted the full 60 seconds!';
-    updateBest('endurance', score, false);
+    title = 'You Survived'; titleClass = 'complete';
+    headline = score; headSub = 'Score';
+    bestKey = 'endurance'; bestVal = score;
   } else if (mode === 'endurance') {
-    overTitle.textContent = 'Game Over';
-    overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'Survived: ' + elapsed + 's';
-    updateBest('endurance', score, false);
+    title = 'Game Over'; titleClass = 'failed';
+    headline = score; headSub = `Survived ${elapsed}s`;
+    bestKey = 'endurance'; bestVal = score;
   } else if (mode === 'zen') {
-    overTitle.textContent = 'Game Over';
-    overScore.textContent = 'Score: ' + score;
-    overTime.textContent = '';
-    updateBest('zen', score, false);
-  } else {
-    overTitle.textContent = 'Game Over';
-    overScore.textContent = 'Score: ' + score;
-    overTime.textContent = 'Time: ' + elapsed + 's';
-    updateBest('classic-fail', score, false);
+    title = 'Stopped';
+    headline = score; headSub = 'Score';
+    bestKey = 'zen'; bestVal = score;
+  } else if (mode === 'tracking') {
+    title = 'Time Up'; titleClass = 'complete';
+    headline = score; headSub = `${headshots} Headshots`;
+    bestKey = 'tracking'; bestVal = score;
+  } else if (mode === 'dodge') {
+    title = 'Time Up'; titleClass = 'complete';
+    headline = weightedFinal; headSub = `${score} hits · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'dodge'; bestVal = weightedFinal;
+  } else if (mode === 'flicks') {
+    title = 'Time Up'; titleClass = 'complete';
+    headline = score; headSub = 'Targets';
+    bestKey = 'flicks'; bestVal = score;
+  } else if (mode === 'cylinder') {
+    title = 'Time Up'; titleClass = 'complete';
+    headline = weightedFinal; headSub = `${score} hits · ${headshots} HS · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'cylinder'; bestVal = weightedFinal;
+  } else if (mode === 'pole') {
+    title = 'Time Up'; titleClass = 'complete';
+    headline = weightedFinal; headSub = `${score} hits · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'pole'; bestVal = weightedFinal;
   }
 
-  overlay.classList.add('show');
+  overTitle.textContent = title;
+  overTitle.className = titleClass;
+  $('result-headline').textContent = headline;
+  $('result-sub').textContent = headSub;
+  // Accuracy band coloring (85-95% gold band)
+  const accEl = $('go-acc');
+  accEl.textContent = acc + '%';
+  accEl.classList.remove('in-band', 'too-low', 'too-high');
+  const accTipEl = $('acc-tip');
+  accTipEl.classList.remove('in-band', 'too-low', 'too-high');
+  if (shotsFired === 0) {
+    accTipEl.textContent = '';
+  } else if (acc >= 85 && acc <= 95) {
+    accEl.classList.add('in-band');
+    accTipEl.classList.add('in-band');
+    accTipEl.textContent = '✓ Ideal range — push for more speed';
+  } else if (acc < 85) {
+    accEl.classList.add('too-low');
+    accTipEl.classList.add('too-low');
+    accTipEl.textContent = '↓ Below 85% — slow down or drop difficulty';
+  } else {
+    accEl.classList.add('too-high');
+    accTipEl.classList.add('too-high');
+    accTipEl.textContent = '↑ Above 95% — increase difficulty';
+  }
+
+  $('go-hits').textContent = `${shotsHit}/${shotsFired}`;
+  $('go-streak').textContent = bestStreak;
+
+  const reactiveCount = pursuerReactiveSamples.length;
+  if (mode === 'cylinder' && reactiveCount > 0) {
+    const avgN = Math.round(pursuerReactiveSamples.reduce((a,b)=>a+b,0) / reactiveCount);
+    const avgF = Math.round(pursuerCorrectSamples.reduce((a,b)=>a+b,0) / reactiveCount);
+    $('go-notice').textContent = avgN + 'ms';
+    $('go-flick').textContent  = avgF + 'ms';
+  } else {
+    $('go-notice').textContent = '—';
+    $('go-flick').textContent  = '—';
+  }
+
+  // PB detection + history
+  let isPb = false;
+  let pbLine = '';
+  let pbDelta = '';
+  let pbDeltaBad = false;
+  let history = [];
+  if (bestKey) {
+    const fullKey = bestKey + '-' + Settings.difficulty;
+    lastHistoryKey = fullKey;
+    lastHistoryLower = lower;
+    const stored = localStorage.getItem('best2_' + fullKey);
+    const prevBest = stored ? parseFloat(stored) : null;
+    const validRun = bestVal > 0 || lower;
+    if (prevBest === null) {
+      // First run on this difficulty
+      if (validRun) {
+        localStorage.setItem('best2_' + fullKey, bestVal);
+        pbLine = 'First run on this difficulty';
+        pbDelta = '';
+      }
+    } else {
+      const better = lower ? bestVal < prevBest : bestVal > prevBest;
+      if (better && validRun) {
+        isPb = true;
+        const delta = lower ? (prevBest - bestVal) : (bestVal - prevBest);
+        const pct = (delta / prevBest) * 100;
+        const fmt = lower
+          ? `${delta.toFixed(2)}s faster · +${pct.toFixed(1)}% better`
+          : `+${delta} · +${pct.toFixed(1)}% better`;
+        localStorage.setItem('best2_' + fullKey, bestVal);
+        pbLine = `Previous best: ${lower ? prevBest.toFixed(2) + 's' : prevBest}`;
+        pbDelta = fmt;
+      } else {
+        const delta = lower ? (bestVal - prevBest) : (prevBest - bestVal);
+        const pct = (delta / prevBest) * 100;
+        pbLine = `Best: ${lower ? prevBest.toFixed(2) + 's' : prevBest}`;
+        pbDelta = lower
+          ? `${delta.toFixed(2)}s slower · -${pct.toFixed(1)}%`
+          : `-${delta} from best · -${pct.toFixed(1)}%`;
+        pbDeltaBad = true;
+      }
+    }
+    // Persist this run to history (separate from PB)
+    const histScore = lower ? parseFloat(elapsed) : (usesMul ? weightedFinal : score);
+    history = pushRunHistory(fullKey, {
+      score: histScore,
+      acc,
+      hits: score,
+      headshots,
+      mul: avgMul,
+      streak: bestStreak,
+      ts: Date.now()
+    });
+  }
+
+  $('pb-pill').style.display = isPb ? 'inline-block' : 'none';
+  const headlineEl = $('result-headline');
+  headlineEl.classList.toggle('pb', isPb);
+  // Force-restart animation
+  if (isPb) { headlineEl.style.animation = 'none'; void headlineEl.offsetWidth; headlineEl.style.animation = ''; }
+
+  const pbDeltaEl = $('pb-delta');
+  if (pbDelta) {
+    pbDeltaEl.textContent = pbDelta;
+    pbDeltaEl.classList.toggle('bad', pbDeltaBad);
+    pbDeltaEl.style.display = 'block';
+  } else {
+    pbDeltaEl.style.display = 'none';
+  }
+
+  $('pb-line').innerHTML = pbLine;
+  bestScoreEl.textContent = '';
+  overTime.textContent = '';
+
+  // Charts
+  const scoreCanvas = $('chart-score');
+  const accCanvas = $('chart-acc');
+  if (history.length > 0) {
+    const scoreVals = history.map(r => r.score);
+    const accVals = history.map(r => r.acc);
+    const scoreAvg = rollingAverage(scoreVals, 5);
+    const accAvg = rollingAverage(accVals, 5);
+    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: scoreAvg });
+    drawLineChart(accCanvas,  accVals,  '#10b981', { fixedMin: 0, fixedMax: 100, overlay: accAvg });
+    const lastScore = scoreVals[scoreVals.length - 1];
+    $('chart-score-latest').textContent = lower ? lastScore.toFixed(2) + 's' : lastScore;
+    $('chart-acc-latest').textContent = (accVals[accVals.length - 1] || 0) + '%';
+  } else {
+    scoreCanvas.getContext('2d').clearRect(0, 0, scoreCanvas.width, scoreCanvas.height);
+    accCanvas.getContext('2d').clearRect(0, 0, accCanvas.width, accCanvas.height);
+    $('chart-score-latest').textContent = '';
+    $('chart-acc-latest').textContent = '';
+  }
+
+  showOnly(overlayScreen);
 }
 
-function updateBest(key, value, lowerIsBetter) {
-  const stored = localStorage.getItem('best_' + key);
-  const best = stored ? parseFloat(stored) : null;
-  let isBest = false;
+// ============================================================================
+// Calibration
+// ============================================================================
+const calInput = $('cal-input');
+const calLive = $('cal-live');
+const calSuggest = $('cal-suggest');
 
-  if (best === null) {
-    isBest = true;
-  } else if (lowerIsBetter) {
-    isBest = value < best;
+function calLiveDisplay() {
+  calLive.textContent = Math.round(calYawTotal) + ' movement units';
+  if (calYawTotal > 0) {
+    calSuggest.textContent = (calYawTotal / DPI).toFixed(4) + ' in / 360°';
+  }
+}
+
+calInput.value = inchesPer360;
+calInput.addEventListener('input', () => {
+  const v = parseFloat(calInput.value);
+  if (v > 0 && isFinite(v)) setInches(v);
+});
+$('cal-reset').onclick = () => { setInches(DEFAULT_INCHES_PER_360); calInput.value = DEFAULT_INCHES_PER_360; };
+$('cal-setup').onclick = () => { showFirstRun(); };
+$('cal-start').onclick = () => {
+  calibrating = true;
+  calYawTotal = 0;
+  calLiveDisplay();
+  calOverlay.classList.add('show');
+  requestLock();
+};
+function finishCalibration(save) {
+  calibrating = false;
+  calOverlay.classList.remove('show');
+  if (document.exitPointerLock) document.exitPointerLock();
+  if (save && calYawTotal > 0) {
+    const newIn360 = calYawTotal / DPI;
+    setInches(newIn360);
+    calInput.value = newIn360.toFixed(4);
+  }
+}
+
+// ============================================================================
+// Fullscreen
+// ============================================================================
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+fsButton.onclick = toggleFullscreen;
+
+// ============================================================================
+// Settings UI
+// ============================================================================
+function openSettings() { showOnly(settingsScreen); syncSettingsUI(); }
+function closeSettings() {
+  saveSettings();
+  if (gamePaused) showOnly(pauseScreen);
+  else if (gameActive) { showOnly(null); resumeGame(); }
+  else showMainMenu();
+}
+
+// Tabs
+for (const tab of document.querySelectorAll('.settings-tabs .tab')) {
+  tab.onclick = () => {
+    for (const t of document.querySelectorAll('.settings-tabs .tab')) t.classList.remove('active');
+    tab.classList.add('active');
+    for (const s of document.querySelectorAll('.settings-content .section')) s.classList.remove('active');
+    document.querySelector(`.settings-content .section[data-section="${tab.dataset.tab}"]`).classList.add('active');
+  };
+}
+
+function bindRange(id, valueId, getFn, setFn) {
+  const el = $(id);
+  const v = $(valueId);
+  el.addEventListener('input', () => {
+    setFn(parseFloat(el.value));
+    v.textContent = el.value;
+    onSettingsChanged();
+  });
+  return () => { el.value = getFn(); v.textContent = getFn(); };
+}
+function bindCheckbox(id, getFn, setFn) {
+  const el = $(id);
+  el.addEventListener('change', () => { setFn(el.checked); onSettingsChanged(); });
+  return () => { el.checked = getFn(); };
+}
+function bindColor(id, getFn, setFn) {
+  const el = $(id);
+  el.addEventListener('input', () => { setFn(el.value); onSettingsChanged(); });
+  return () => { el.value = getFn(); };
+}
+function bindSelect(id, getFn, setFn) {
+  const el = $(id);
+  el.addEventListener('change', () => { setFn(el.value); onSettingsChanged(); });
+  return () => { el.value = getFn(); };
+}
+function bindNumber(id, getFn, setFn) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    if (isFinite(v)) { setFn(v); onSettingsChanged(); }
+  });
+  return () => { el.value = getFn(); };
+}
+
+const syncFns = [];
+syncFns.push(bindSelect('set-xhair-style',   () => Settings.crosshair.style,   v => Settings.crosshair.style = v));
+syncFns.push(bindRange ('set-xhair-size',    'set-xhair-size-v',  () => Settings.crosshair.size,      v => Settings.crosshair.size = v));
+syncFns.push(bindRange ('set-xhair-thick',   'set-xhair-thick-v', () => Settings.crosshair.thickness, v => Settings.crosshair.thickness = v));
+syncFns.push(bindRange ('set-xhair-gap',     'set-xhair-gap-v',   () => Settings.crosshair.gap,       v => Settings.crosshair.gap = v));
+syncFns.push(bindColor ('set-xhair-color',   () => Settings.crosshair.color,   v => Settings.crosshair.color = v));
+syncFns.push(bindCheckbox('set-xhair-outline', () => Settings.crosshair.outline, v => Settings.crosshair.outline = v));
+syncFns.push(bindCheckbox('set-xhair-dot',     () => Settings.crosshair.dot,     v => Settings.crosshair.dot = v));
+syncFns.push(bindRange ('set-xhair-dotsize', 'set-xhair-dotsize-v', () => Settings.crosshair.dotSize, v => Settings.crosshair.dotSize = v));
+syncFns.push(bindColor ('set-xhair-dotcolor', () => Settings.crosshair.dotColor, v => Settings.crosshair.dotColor = v));
+
+syncFns.push(bindSelect('set-hitsound', () => Settings.hitsound, v => Settings.hitsound = v));
+syncFns.push(bindCheckbox('set-misssound', () => Settings.misssound, v => Settings.misssound = v));
+syncFns.push(bindRange('set-volume', 'set-volume-v', () => Settings.volume, v => Settings.volume = v));
+
+syncFns.push(bindSelect('set-skybox', () => Settings.skybox, v => Settings.skybox = v));
+syncFns.push(bindColor ('set-target-color', () => Settings.targetColor, v => Settings.targetColor = v));
+syncFns.push(bindColor ('set-head-color',   () => Settings.headColor,   v => Settings.headColor = v));
+syncFns.push(bindRange ('set-fov', 'set-fov-v', () => Settings.fov, v => Settings.fov = v));
+syncFns.push(bindRange ('set-hud-inset', 'set-hud-inset-v', () => Settings.hudInset, v => Settings.hudInset = v));
+
+syncFns.push(bindSelect('set-weapon', () => Settings.weapon, v => Settings.weapon = v));
+syncFns.push(bindSelect('set-difficulty', () => Settings.difficulty, v => Settings.difficulty = v));
+syncFns.push(bindRange ('set-speed', 'set-speed-v', () => Settings.walkSpeed, v => Settings.walkSpeed = v));
+syncFns.push(bindNumber('set-tracking-count', () => Settings.trackingCount, v => Settings.trackingCount = Math.max(1, Math.min(8, Math.round(v)))));
+syncFns.push(bindSelect('set-pursuer-pattern', () => Settings.pursuerPattern, v => {
+  Settings.pursuerPattern = v;
+  const ms = $('menu-pattern-select');
+  if (ms) ms.value = v;
+}));
+
+function syncSettingsUI() { for (const fn of syncFns) fn(); }
+
+function onSettingsChanged() {
+  applySkybox();
+  camera.fov = Settings.fov;
+  camera.updateProjectionMatrix();
+  document.documentElement.style.setProperty('--hud-inset', Settings.hudInset + 'px');
+  renderCrosshair();
+  refreshEnemyColors();
+  // Reflect difficulty in main menu select too
+  const ds = $('difficulty-select');
+  if (ds) ds.value = Settings.difficulty;
+  saveSettings();
+}
+
+$('settings-back').onclick = closeSettings;
+$('settings-reset').onclick = () => {
+  Object.assign(Settings, JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+  saveSettings();
+  syncSettingsUI();
+  onSettingsChanged();
+};
+
+// ============================================================================
+// Wire menu buttons
+// ============================================================================
+$('btn-classic').onclick   = () => startGame('classic');
+$('btn-endurance').onclick = () => startGame('endurance');
+$('btn-zen').onclick       = () => startGame('zen');
+$('btn-flicks').onclick    = () => startGame('flicks');
+$('btn-tracking').onclick  = () => startGame('tracking');
+$('btn-dodge').onclick     = () => startGame('dodge');
+$('btn-cylinder').onclick  = () => startGame('cylinder');
+$('btn-pole').onclick      = () => startGame('pole');
+$('btn-settings').onclick  = openSettings;
+
+$('difficulty-select').onchange = (e) => {
+  Settings.difficulty = e.target.value;
+  saveSettings();
+};
+$('difficulty-select').value = Settings.difficulty;
+
+$('menu-weapon-select').onchange = (e) => setWeapon(e.target.value);
+$('menu-weapon-select').value = Settings.weapon;
+
+$('menu-pattern-select').onchange = (e) => {
+  Settings.pursuerPattern = e.target.value;
+  saveSettings();
+  const sel = $('set-pursuer-pattern');
+  if (sel) sel.value = e.target.value;
+};
+$('menu-pattern-select').value = Settings.pursuerPattern;
+
+// Pause menu buttons
+$('pause-resume').onclick    = resumeGame;
+$('pause-restart').onclick   = () => { resumeGame(); startGame(mode); };
+$('pause-settings').onclick  = openSettings;
+$('pause-fullscreen').onclick = toggleFullscreen;
+$('pause-menu-btn').onclick  = quitToMenu;
+
+// Game over buttons
+$('btn-retry').onclick = () => startGame(mode);
+$('btn-menu').onclick  = showMainMenu;
+
+// ============================================================================
+// Run history drill-down
+// ============================================================================
+let lastHistoryKey = null;
+let lastHistoryLower = false;
+
+function openHistory() {
+  if (!lastHistoryKey) return;
+  const arr = getRunHistory(lastHistoryKey);
+  const lower = lastHistoryLower;
+  $('history-title').textContent = 'Run History';
+  $('history-subtitle').textContent = lastHistoryKey.replace(/-/g, ' · ');
+
+  // Summary
+  const summary = $('history-summary');
+  if (arr.length === 0) {
+    summary.innerHTML = '<div class="stat"><span class="lbl">No runs yet</span></div>';
   } else {
-    isBest = value > best;
+    const scores = arr.map(r => r.score);
+    const accs = arr.map(r => r.acc);
+    const best = lower ? Math.min(...scores) : Math.max(...scores);
+    const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+    const avgAcc = accs.reduce((a,b)=>a+b,0) / accs.length;
+    summary.innerHTML = `
+      <div class="stat"><span class="lbl">Runs</span><span class="val">${arr.length}</span></div>
+      <div class="stat"><span class="lbl">Best</span><span class="val">${lower ? best.toFixed(2) + 's' : best}</span></div>
+      <div class="stat"><span class="lbl">Avg</span><span class="val">${lower ? avg.toFixed(2) + 's' : Math.round(avg)}</span></div>
+      <div class="stat"><span class="lbl">Avg Acc</span><span class="val">${Math.round(avgAcc)}%</span></div>
+    `;
   }
 
-  if (isBest) {
-    localStorage.setItem('best_' + key, value);
-    bestScoreEl.textContent = 'New Best! ' + (lowerIsBetter ? value + 's' : value);
+  // Charts (larger versions of the gameover charts)
+  const scoreCanvas = $('hist-chart-score');
+  const accCanvas = $('hist-chart-acc');
+  if (arr.length > 0) {
+    const scoreVals = arr.map(r => r.score);
+    const accVals = arr.map(r => r.acc);
+    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5) });
+    drawLineChart(accCanvas,  accVals,  '#10b981', { fixedMin: 0, fixedMax: 100, overlay: rollingAverage(accVals, 5) });
+    const lastS = scoreVals[scoreVals.length - 1];
+    $('hist-score-latest').textContent = lower ? lastS.toFixed(2) + 's' : lastS;
+    $('hist-acc-latest').textContent = (accVals[accVals.length - 1] || 0) + '%';
   } else {
-    bestScoreEl.textContent = 'Best: ' + (lowerIsBetter ? best + 's' : best);
+    [scoreCanvas, accCanvas].forEach(c => c.getContext('2d').clearRect(0,0,c.width,c.height));
+    $('hist-score-latest').textContent = '';
+    $('hist-acc-latest').textContent = '';
   }
+
+  // Table
+  const tbody = $('history-rows');
+  tbody.innerHTML = '';
+  if (arr.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:18px;">No runs recorded yet</td></tr>';
+  } else {
+    const scores = arr.map(r => r.score);
+    const bestVal = lower ? Math.min(...scores) : Math.max(...scores);
+    const lastIdx = arr.length - 1;
+    arr.slice().reverse().forEach((r, i) => {
+      const idx = arr.length - i;
+      const isLatest = (i === 0);
+      const isBest = (r.score === bestVal);
+      const date = new Date(r.ts);
+      const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const row = document.createElement('tr');
+      if (isLatest) row.classList.add('latest');
+      if (isBest)   row.classList.add('best');
+      row.innerHTML = `
+        <td>${idx}</td>
+        <td>${dateStr}</td>
+        <td>${lower ? r.score.toFixed(2) + 's' : r.score}</td>
+        <td>${r.acc}%</td>
+        <td>${r.hits ?? '—'}</td>
+        <td>${r.headshots ?? '—'}</td>
+        <td>${r.mul != null ? '×' + r.mul.toFixed(2) : '—'}</td>
+        <td>${r.streak ?? '—'}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  showOnly($('history-screen'));
+}
+
+$('history-back').onclick = () => {
+  // Return to game over overlay
+  showOnly(overlayScreen);
+};
+$('history-clear').onclick = () => {
+  if (!lastHistoryKey) return;
+  if (confirm('Clear all runs for ' + lastHistoryKey + '?')) {
+    localStorage.removeItem(HISTORY_PREFIX + lastHistoryKey);
+    openHistory();
+  }
+};
+
+// Wire chart cards to open history
+$('chart-score').parentElement.addEventListener('click', openHistory);
+$('chart-acc').parentElement.addEventListener('click', openHistory);
+
+// ============================================================================
+// First-run sensitivity prompt
+// ============================================================================
+const firstRunScreen = $('first-run');
+const firstRunInput = $('first-run-input');
+
+function showFirstRun() {
+  firstRunInput.value = inchesPer360.toFixed(4);
+  showOnly(firstRunScreen);
+  setTimeout(() => firstRunInput.focus(), 50);
+}
+
+$('first-run-save').onclick = () => {
+  const v = parseFloat(firstRunInput.value);
+  if (v > 0 && isFinite(v)) {
+    setInches(v);
+    calInput.value = v;
+  }
+  localStorage.setItem('first_run_done', '1');
+  showMainMenu();
+};
+$('first-run-skip').onclick = () => {
+  localStorage.setItem('first_run_done', '1');
+  showMainMenu();
+};
+firstRunInput.addEventListener('keydown', (e) => {
+  if (e.code === 'Enter') $('first-run-save').click();
+});
+
+// ============================================================================
+// Initial sync
+// ============================================================================
+applySkybox();
+renderCrosshair();
+syncSettingsUI();
+camera.fov = Settings.fov;
+camera.updateProjectionMatrix();
+document.documentElement.style.setProperty('--hud-inset', Settings.hudInset + 'px');
+
+if (!localStorage.getItem('first_run_done')) {
+  showFirstRun();
 }
 </script>
 </body>

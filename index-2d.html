@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Don't Tap the White Tile</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+
+  #game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  #stats {
+    display: flex;
+    justify-content: space-between;
+    width: 92vmin;
+    max-width: 440px;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+
+  #stats span {
+    background: rgba(255,255,255,0.1);
+    padding: 6px 14px;
+    border-radius: 8px;
+  }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    width: 92vmin;
+    max-width: 440px;
+    height: 92vmin;
+    max-height: 440px;
+    touch-action: manipulation;
+  }
+
+  .tile {
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.08s, transform 0.08s;
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+
+  .tile.white {
+    background: #000;
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  .tile.black {
+    background: #111;
+    border-color: rgba(255,255,255,0.5);
+  }
+
+  .tile.black:active {
+    transform: scale(0.95);
+  }
+
+  .tile.flash-red {
+    background: #e74c3c !important;
+  }
+
+  .tile.flash-green {
+    background: #2ecc71 !important;
+  }
+
+  /* Menu */
+  #menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #menu button {
+    width: 220px;
+    padding: 14px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  #menu button:active {
+    transform: scale(0.97);
+  }
+
+  #btn-classic {
+    background: #0f3460;
+    color: #fff;
+  }
+
+  #btn-endurance {
+    background: #533483;
+    color: #fff;
+  }
+
+  #btn-zen {
+    background: #e94560;
+    color: #fff;
+  }
+
+  .mode-desc {
+    font-size: 0.78rem;
+    opacity: 0.7;
+    font-weight: 400;
+  }
+
+  /* Game Over overlay */
+  #overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 10;
+  }
+
+  #overlay.show { display: flex; }
+
+  #overlay h2 { font-size: 2rem; }
+  #overlay p { font-size: 1.2rem; opacity: 0.9; }
+
+  #overlay button {
+    padding: 12px 36px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  #btn-retry { background: #0f3460; color: #fff; }
+  #btn-menu { background: #533483; color: #fff; }
+
+  #best-score {
+    font-size: 0.95rem;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <h1>Don't Tap the White Tile</h1>
+
+  <!-- Menu -->
+  <div id="menu">
+    <button id="btn-classic">Classic<br><span class="mode-desc">Tap 50 black tiles as fast as you can</span></button>
+    <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive as long as you can — 60 seconds</span></button>
+    <button id="btn-zen">Zen<br><span class="mode-desc">No timer, no pressure — just tap</span></button>
+  </div>
+
+  <!-- In-game -->
+  <div id="game" style="display:none;">
+    <div id="stats">
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display" style="display:none;">Time: 0.00</span>
+    </div>
+    <div id="grid"></div>
+  </div>
+</div>
+
+<!-- Game Over -->
+<div id="overlay">
+  <h2 id="over-title">Game Over</h2>
+  <p id="over-score"></p>
+  <p id="over-time"></p>
+  <p id="best-score"></p>
+  <button id="btn-retry">Play Again</button>
+  <button id="btn-menu">Menu</button>
+</div>
+
+<script>
+const NUM_BLACK = 3;
+const GRID_SIZE = 16;
+const CLASSIC_TARGET = 50;
+const ENDURANCE_TIME = 60;
+
+let tiles = [];
+let blackTiles = new Set();
+let score = 0;
+let mode = '';
+let gameActive = false;
+let timerInterval = null;
+let startTime = 0;
+let timeLeft = 0;
+
+const grid = document.getElementById('grid');
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dragstart', e => e.preventDefault());
+const menu = document.getElementById('menu');
+const gameDiv = document.getElementById('game');
+const scoreDisplay = document.getElementById('score-display');
+const timerDisplay = document.getElementById('timer-display');
+const overlay = document.getElementById('overlay');
+const overTitle = document.getElementById('over-title');
+const overScore = document.getElementById('over-score');
+const overTime = document.getElementById('over-time');
+const bestScoreEl = document.getElementById('best-score');
+
+// Build grid
+for (let i = 0; i < GRID_SIZE; i++) {
+  const tile = document.createElement('div');
+  tile.classList.add('tile', 'white');
+  tile.dataset.index = i;
+  grid.appendChild(tile);
+  tiles.push(tile);
+}
+
+// Event delegation on grid — find tile by coordinates so corner/edge clicks always register
+grid.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const rect = grid.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const col = Math.floor((x / rect.width) * 4);
+  const row = Math.floor((y / rect.height) * 4);
+  if (col < 0 || col > 3 || row < 0 || row > 3) return;
+  handleTap(row * 4 + col);
+});
+
+// Menu buttons
+document.getElementById('btn-classic').onclick = () => startGame('classic');
+document.getElementById('btn-endurance').onclick = () => startGame('endurance');
+document.getElementById('btn-zen').onclick = () => startGame('zen');
+document.getElementById('btn-retry').onclick = () => startGame(mode);
+document.getElementById('btn-menu').onclick = showMenu;
+
+function showMenu() {
+  overlay.classList.remove('show');
+  gameDiv.style.display = 'none';
+  menu.style.display = 'flex';
+  stopTimer();
+}
+
+function startGame(m) {
+  mode = m;
+  score = 0;
+  gameActive = true;
+  overlay.classList.remove('show');
+  menu.style.display = 'none';
+  gameDiv.style.display = 'flex';
+  gameDiv.style.flexDirection = 'column';
+  gameDiv.style.alignItems = 'center';
+  scoreDisplay.textContent = 'Score: 0';
+  stopTimer();
+
+  // Timer setup
+  if (mode === 'classic') {
+    timerDisplay.style.display = 'inline';
+    startTime = Date.now();
+    timerInterval = setInterval(updateClassicTimer, 50);
+  } else if (mode === 'endurance') {
+    timerDisplay.style.display = 'inline';
+    timeLeft = ENDURANCE_TIME;
+    timerDisplay.textContent = 'Time: ' + ENDURANCE_TIME.toFixed(1);
+    startTime = Date.now();
+    timerInterval = setInterval(updateEnduranceTimer, 50);
+  } else {
+    timerDisplay.style.display = 'none';
+  }
+
+  // Reset tiles
+  blackTiles.clear();
+  placeBlackTiles(NUM_BLACK);
+  renderTiles();
+}
+
+function placeBlackTiles(count, exclude = -1) {
+  const whiteTiles = [];
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!blackTiles.has(i) && i !== exclude) whiteTiles.push(i);
+  }
+  for (let j = 0; j < count && whiteTiles.length > 0; j++) {
+    const idx = Math.floor(Math.random() * whiteTiles.length);
+    blackTiles.add(whiteTiles[idx]);
+    whiteTiles.splice(idx, 1);
+  }
+}
+
+function renderTiles() {
+  for (let i = 0; i < GRID_SIZE; i++) {
+    tiles[i].className = 'tile ' + (blackTiles.has(i) ? 'black' : 'white');
+  }
+}
+
+function handleTap(index) {
+  if (!gameActive) return;
+
+  if (blackTiles.has(index)) {
+    // Correct tap
+    score++;
+    scoreDisplay.textContent = 'Score: ' + score;
+    blackTiles.delete(index);
+    tiles[index].classList.add('flash-green');
+    setTimeout(() => tiles[index].classList.remove('flash-green'), 80);
+    placeBlackTiles(1, index);
+    renderTiles();
+
+    if (mode === 'classic' && score >= CLASSIC_TARGET) {
+      gameOver(true);
+    }
+  } else {
+    // Wrong tap — hit white tile
+    tiles[index].classList.add('flash-red');
+    gameOver(false);
+  }
+}
+
+function updateClassicTimer() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  timerDisplay.textContent = 'Time: ' + elapsed.toFixed(2);
+}
+
+function updateEnduranceTimer() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  timeLeft = ENDURANCE_TIME - elapsed;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    timerDisplay.textContent = 'Time: 0.0';
+    gameOver(true);
+    return;
+  }
+  timerDisplay.textContent = 'Time: ' + timeLeft.toFixed(1);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function gameOver(won) {
+  gameActive = false;
+  stopTimer();
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  if (mode === 'classic' && won) {
+    overTitle.textContent = 'Complete!';
+    overScore.textContent = CLASSIC_TARGET + ' tiles in ' + elapsed + 's';
+    overTime.textContent = '';
+    updateBest('classic', parseFloat(elapsed), true);
+  } else if (mode === 'endurance' && won) {
+    overTitle.textContent = 'You Survived!';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'You lasted the full 60 seconds!';
+    updateBest('endurance', score, false);
+  } else if (mode === 'endurance') {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'Survived: ' + elapsed + 's';
+    updateBest('endurance', score, false);
+  } else if (mode === 'zen') {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = '';
+    updateBest('zen', score, false);
+  } else {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'Time: ' + elapsed + 's';
+    updateBest('classic-fail', score, false);
+  }
+
+  overlay.classList.add('show');
+}
+
+function updateBest(key, value, lowerIsBetter) {
+  const stored = localStorage.getItem('best_' + key);
+  const best = stored ? parseFloat(stored) : null;
+  let isBest = false;
+
+  if (best === null) {
+    isBest = true;
+  } else if (lowerIsBetter) {
+    isBest = value < best;
+  } else {
+    isBest = value > best;
+  }
+
+  if (isBest) {
+    localStorage.setItem('best_' + key, value);
+    bestScoreEl.textContent = 'New Best! ' + (lowerIsBetter ? value + 's' : value);
+  } else {
+    bestScoreEl.textContent = 'Best: ' + (lowerIsBetter ? best + 's' : best);
+  }
+}
+</script>
+</body>
+</html>
