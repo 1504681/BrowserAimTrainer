@@ -380,6 +380,7 @@
   <div class="menu-grid">
     <button class="btn success" id="btn-tracking">Tracking<span class="desc">Moving targets · headshots count double</span></button>
     <button class="btn danger" id="btn-dodge">Dodge<span class="desc">Strafe with the bar to maximize score</span></button>
+    <button class="btn success" id="btn-cylinder">Pursuer<span class="desc">Cylinder bots that orbit and strafe around you</span></button>
   </div>
 
   <div class="row" style="margin-top:14px;">
@@ -469,6 +470,12 @@
       </div>
 
       <div class="section" data-section="gameplay">
+        <div class="field"><label>Weapon</label>
+          <select id="set-weapon">
+            <option value="hitscan">Hitscan (semi-auto, 1-shot kill)</option>
+            <option value="tracking">Tracking (auto, lower dmg)</option>
+          </select>
+        </div>
         <div class="field"><label>Difficulty</label>
           <select id="set-difficulty">
             <option value="easy">Easy</option>
@@ -551,8 +558,15 @@ const DEFAULT_SETTINGS = {
   fov: 90,
   difficulty: 'normal',
   walkSpeed: 5.5,
-  trackingCount: 4
+  trackingCount: 4,
+  weapon: 'hitscan'
 };
+
+const WEAPONS = {
+  hitscan:  { dmgBody: 1,    dmgHead: 2,    fireInterval: 0,   auto: false },
+  tracking: { dmgBody: 0.08, dmgHead: 0.16, fireInterval: 50,  auto: true  }
+};
+function currentWeapon() { return WEAPONS[Settings.weapon] || WEAPONS.hitscan; }
 
 const Settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 function loadSettings() {
@@ -822,6 +836,7 @@ const ENDURANCE_TIME = 60;
 const TRACKING_DURATION = 60;
 const DODGE_DURATION = 60;
 const FLICKS_DURATION = 60;
+const CYLINDER_DURATION = 60;
 
 const tileMeshes = [];
 const tileEdges = [];
@@ -987,6 +1002,107 @@ function refreshEnemyColors() {
 }
 
 // ============================================================================
+// Cylinder targets (kiting AI for "Pursuer" mode)
+// ============================================================================
+const cylBodyGeo = new THREE.CylinderGeometry(0.45, 0.45, 1.6, 16);
+const cylHeadGeo = new THREE.SphereGeometry(0.32, 16, 12);
+
+function makeCylinder() {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.targetColor),
+    emissive: new THREE.Color(0x666666),
+    emissiveIntensity: 1.0, metalness: 0.2, roughness: 0.5
+  });
+  const body = new THREE.Mesh(cylBodyGeo, bodyMat);
+  body.castShadow = true;
+  body.userData.part = 'body';
+  group.add(body);
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(Settings.headColor),
+    emissive: new THREE.Color(0xaa3030),
+    emissiveIntensity: 1.0, metalness: 0.1, roughness: 0.5
+  });
+  const head = new THREE.Mesh(cylHeadGeo, headMat);
+  head.position.y = 1.6 / 2 + 0.32 + 0.04;
+  head.castShadow = true;
+  head.userData.part = 'head';
+  group.add(head);
+
+  const e = {
+    group, body, head, bodyMat, headMat,
+    vx: 0, vz: 0, hp: 2,
+    strafeDir: Math.random() < 0.5 ? -1 : 1,
+    strafeTimer: 0.5 + Math.random() * 1.5,
+    flashUntil: 0,
+    cylinder: true
+  };
+  scene.add(group);
+  enemies.push(e);
+  return e;
+}
+
+function placeCylinder(e) {
+  // Spawn at random angle around player at far edge
+  const angle = Math.random() * Math.PI * 2;
+  const r = 9 + Math.random() * 3;
+  e.group.position.set(
+    camera.position.x + Math.sin(angle) * r,
+    1.0,
+    camera.position.z - Math.cos(angle) * r
+  );
+  // Clamp to room
+  const lim = ROOM_HALF - 1;
+  e.group.position.x = Math.max(-lim, Math.min(lim, e.group.position.x));
+  e.group.position.z = Math.max(-lim, Math.min(lim, e.group.position.z));
+  e.hp = 2;
+  e.strafeDir = Math.random() < 0.5 ? -1 : 1;
+  e.strafeTimer = 0.6 + Math.random() * 1.4;
+  e.vx = 0; e.vz = 0;
+}
+
+function updateCylinders(dt) {
+  if (mode !== 'cylinder') return;
+  const diff = currentDifficulty();
+  const baseSpeed = 4.5 * diff.speedMul;
+  const targetDist = 7;
+  const lim = ROOM_HALF - 1;
+  for (const e of enemies) {
+    if (!e.cylinder) continue;
+    const dx = e.group.position.x - camera.position.x;
+    const dz = e.group.position.z - camera.position.z;
+    const dist = Math.hypot(dx, dz) || 0.001;
+
+    // Radial: approach if too far, retreat if too close
+    let radial = 0;
+    if (dist > targetDist + 1.2) radial = -baseSpeed * 0.7;
+    else if (dist < targetDist - 1.2) radial = baseSpeed * 0.7;
+
+    // Tangential strafe with periodic direction flips
+    e.strafeTimer -= dt;
+    if (e.strafeTimer <= 0) {
+      e.strafeDir *= -1;
+      e.strafeTimer = (0.6 + Math.random() * 1.0) * (1 / Math.max(0.5, diff.speedMul));
+    }
+
+    const ux = dx / dist, uz = dz / dist;
+    const tx = -uz, tz = ux;
+    e.vx = ux * radial + tx * e.strafeDir * baseSpeed;
+    e.vz = uz * radial + tz * e.strafeDir * baseSpeed;
+
+    e.group.position.x += e.vx * dt;
+    e.group.position.z += e.vz * dt;
+
+    // Bounce off room bounds
+    if (e.group.position.x >  lim) { e.group.position.x =  lim; e.strafeDir *= -1; }
+    if (e.group.position.x < -lim) { e.group.position.x = -lim; e.strafeDir *= -1; }
+    if (e.group.position.z >  lim) { e.group.position.z =  lim; e.strafeDir *= -1; }
+    if (e.group.position.z < -lim) { e.group.position.z = -lim; e.strafeDir *= -1; }
+  }
+}
+
+// ============================================================================
 // Difficulty
 // ============================================================================
 const DIFFICULTY = {
@@ -1148,12 +1264,17 @@ document.addEventListener('mousemove', (e) => {
 });
 
 // Click handling
+let mouseDown = false;
+let lastFireTime = 0;
 canvasEl.addEventListener('mousedown', (e) => {
   if (!gameActive) return;
   if (gamePaused) { resumeGame(); return; }
   if (!pointerLocked) { requestLock(); return; }
+  mouseDown = true;
   shoot();
+  lastFireTime = performance.now();
 });
+window.addEventListener('mouseup', () => { mouseDown = false; });
 
 // Keyboard
 document.addEventListener('keydown', (e) => {
@@ -1180,7 +1301,8 @@ const MOVE_ACCEL = 60;     // m/s² (snappy)
 const MOVE_FRICTION = 14;  // friction when no input
 
 function updateMovement(dt) {
-  if (mode !== 'dodge' || !gameActive || gamePaused) {
+  const movementMode = (mode === 'dodge' || mode === 'cylinder');
+  if (!movementMode || !gameActive || gamePaused) {
     playerVel.set(0, 0, 0);
     return;
   }
@@ -1249,7 +1371,7 @@ function shoot() {
   camera.getWorldDirection(forward);
   raycaster.set(camera.position, forward);
 
-  if (mode === 'tracking' || mode === 'dodge') {
+  if (mode === 'tracking' || mode === 'dodge' || mode === 'cylinder') {
     const parts = [];
     for (const e of enemies) parts.push(e.body, e.head);
     const hits = raycaster.intersectObjects(parts, false);
@@ -1287,7 +1409,8 @@ function showHsToast() {
 function handleEnemyHit(enemy, part) {
   shotsHit++;
   const isHead = part === 'head';
-  const dmg = isHead ? 2 : 1;
+  const w = currentWeapon();
+  const dmg = isHead ? w.dmgHead : w.dmgBody;
   enemy.hp -= dmg;
   enemy.flashUntil = performance.now() + 90;
 
@@ -1302,7 +1425,8 @@ function handleEnemyHit(enemy, part) {
 
     if (mode === 'tracking') placeEnemyOnPanel(enemy);
     else if (mode === 'dodge') placeEnemyAroundPlayer(enemy);
-  } else {
+    else if (mode === 'cylinder') placeCylinder(enemy);
+  } else if (!w.auto) {
     HitSounds[Settings.hitsound]?.(0.7);
   }
 }
@@ -1378,7 +1502,10 @@ function animate(now) {
   camera.rotation.x = pitch;
 
   // Enemy update
-  if (gameActive && !gamePaused && mode === 'tracking') updateEnemies(dt);
+  if (gameActive && !gamePaused) {
+    if (mode === 'tracking') updateEnemies(dt);
+    else if (mode === 'cylinder') updateCylinders(dt);
+  }
 
   // Enemy flash decay
   for (const e of enemies) {
@@ -1417,6 +1544,15 @@ function animate(now) {
         mesh.material.emissive.setRGB(0, 0, 0);
       }
       tileEdges[i].color.copy(isBlack ? EDGE_BRIGHT : EDGE_DIM);
+    }
+  }
+
+  // Auto-fire weapon (tracking) — keep firing while mouse held + locked + active
+  const w = currentWeapon();
+  if (w.auto && mouseDown && pointerLocked && gameActive && !gamePaused) {
+    if (now - lastFireTime >= w.fireInterval) {
+      lastFireTime = now;
+      shoot();
     }
   }
 
@@ -1513,6 +1649,7 @@ function startGame(m) {
   // Configure scene per mode
   dodgeRoom.visible = false;
   dodgeBar.classList.remove('show');
+  backWall.visible = true;
   for (const t of tileMeshes) t.visible = true;
   camera.position.set(0, 1.6, 0);
 
@@ -1539,6 +1676,7 @@ function startGame(m) {
     timerDisplay.style.display = 'inline';
   } else if (mode === 'dodge') {
     for (const t of tileMeshes) t.visible = false;
+    backWall.visible = false;
     dodgeRoom.visible = true;
     dodgeBar.classList.add('show');
     pitch = 0;
@@ -1551,6 +1689,18 @@ function startGame(m) {
     timerDuration = DODGE_DURATION;
     timerDisplay.style.display = 'inline';
     dodgeNextFlip = 0;
+  } else if (mode === 'cylinder') {
+    for (const t of tileMeshes) t.visible = false;
+    backWall.visible = false;
+    dodgeRoom.visible = true;
+    pitch = 0;
+    const targetCount = 2;
+    for (let i = 0; i < targetCount; i++) {
+      const e = makeCylinder();
+      placeCylinder(e);
+    }
+    timerDuration = CYLINDER_DURATION;
+    timerDisplay.style.display = 'inline';
   }
 
   if (timerDuration > 0 || mode === 'classic') {
@@ -1632,6 +1782,11 @@ function gameOver(won) {
     overScore.textContent = `Score: ${score}`;
     overTime.textContent = accLine;
     bestKey = 'flicks'; bestVal = score;
+  } else if (mode === 'cylinder') {
+    overTitle.textContent = 'Time Up!';
+    overScore.textContent = `Score: ${score} (${headshots} headshots)`;
+    overTime.textContent = accLine;
+    bestKey = 'cylinder'; bestVal = score;
   } else {
     overTitle.textContent = 'Game Over';
     overScore.textContent = 'Score: ' + score;
@@ -1780,6 +1935,7 @@ syncFns.push(bindColor ('set-target-color', () => Settings.targetColor, v => Set
 syncFns.push(bindColor ('set-head-color',   () => Settings.headColor,   v => Settings.headColor = v));
 syncFns.push(bindRange ('set-fov', 'set-fov-v', () => Settings.fov, v => Settings.fov = v));
 
+syncFns.push(bindSelect('set-weapon', () => Settings.weapon, v => Settings.weapon = v));
 syncFns.push(bindSelect('set-difficulty', () => Settings.difficulty, v => Settings.difficulty = v));
 syncFns.push(bindRange ('set-speed', 'set-speed-v', () => Settings.walkSpeed, v => Settings.walkSpeed = v));
 syncFns.push(bindNumber('set-tracking-count', () => Settings.trackingCount, v => Settings.trackingCount = Math.max(1, Math.min(8, Math.round(v)))));
@@ -1815,6 +1971,7 @@ $('btn-zen').onclick       = () => startGame('zen');
 $('btn-flicks').onclick    = () => startGame('flicks');
 $('btn-tracking').onclick  = () => startGame('tracking');
 $('btn-dodge').onclick     = () => startGame('dodge');
+$('btn-cylinder').onclick  = () => startGame('cylinder');
 $('btn-settings').onclick  = openSettings;
 
 $('difficulty-select').onchange = (e) => {
