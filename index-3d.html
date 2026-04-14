@@ -210,7 +210,7 @@
 
 <div id="menu">
   <h1>Don't Tap the White Tile<span class="badge">FPS</span></h1>
-  <div class="sens">1000 DPI · Overwatch sens 3.54 (~15.4 in / 360°)</div>
+  <div class="sens">1000 DPI · Overwatch sens 3.54 · 15.4083 in / 360°</div>
   <button id="btn-classic">Classic<br><span class="mode-desc">Shoot 50 black tiles as fast as you can</span></button>
   <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive 60 seconds — don't shoot the wrong tile</span></button>
   <button id="btn-zen">Zen<br><span class="mode-desc">No timer — just shoot</span></button>
@@ -239,9 +239,10 @@ const GRID_SIZE = 16;
 const CLASSIC_TARGET = 50;
 const ENDURANCE_TIME = 60;
 
-// Overwatch sensitivity formula: degrees_per_count = sens * 0.0066
-const OW_SENS = 3.54;
-const RAD_PER_COUNT = OW_SENS * 0.0066 * Math.PI / 180;
+// Sensitivity: 1000 DPI, Overwatch sens 3.54 → 15.4083 in/360
+const DPI = 1000;
+const INCHES_PER_360 = 15.4083;
+const RAD_PER_COUNT = (2 * Math.PI) / (INCHES_PER_360 * DPI);
 
 // ===== Game state =====
 let blackTiles = new Set();
@@ -289,8 +290,8 @@ sceneWrap.appendChild(renderer.domElement);
 // Lights
 scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 const spot = new THREE.SpotLight(0xffffff, 35, 25, Math.PI / 5, 0.4, 1.2);
-spot.position.set(0, 6, 2);
-spot.target.position.set(0, 1.6, -8);
+spot.position.set(0, 7, 2);
+spot.target.position.set(0, 3.1, -8);
 spot.castShadow = true;
 spot.shadow.mapSize.set(1024, 1024);
 scene.add(spot);
@@ -316,7 +317,7 @@ const GAP = 0.18;
 const STEP = TILE_SIZE + GAP;
 const GRID_OFFSET = -((4 - 1) * STEP) / 2;
 const PANEL_Z = -8;
-const PANEL_Y = 1.6;
+const PANEL_Y = 3.1;
 
 const tileMeshes = [];
 const tileEdges = [];
