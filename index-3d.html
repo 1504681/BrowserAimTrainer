@@ -155,6 +155,23 @@
   }
   #hs-toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
+  /* Spawn direction indicator */
+  #spawn-toast {
+    position: fixed; top: 38%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--accent);
+    font-size: 1.4rem; font-weight: 800;
+    text-shadow: 0 0 14px rgba(6,182,212,0.7), 0 2px 6px rgba(0,0,0,0.9);
+    pointer-events: none; z-index: 6; opacity: 0;
+    transition: opacity 0.15s;
+    letter-spacing: 2px;
+    background: rgba(0,0,0,0.55);
+    padding: 8px 18px;
+    border-radius: var(--r);
+    border: 1px solid rgba(6,182,212,0.5);
+  }
+  #spawn-toast.show { opacity: 1; }
+
   /* World-space HP bars (above each target) */
   .world-hpbar {
     position: fixed;
@@ -281,25 +298,65 @@
   }
   #dir-bar.wrong .dir-text { color: var(--danger); }
 
-  /* Dodge bar */
+  /* Dodge bar (player-driven fill, switch at green zone for max points) */
   #dodge-bar {
-    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.6);
-    padding: 10px 24px;
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.2);
-    font-size: 1.5rem; font-weight: 700;
+    position: fixed; top: 50%; right: 24px;
+    transform: translateY(-50%);
+    background: rgba(10,11,16,0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 18px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
     z-index: 4; display: none;
-    text-align: center; min-width: 280px;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    text-align: center; width: 240px;
+    box-shadow: var(--shadow);
+    transition: border-color var(--t-fast), background var(--t-fast);
   }
   #dodge-bar.show { display: block; }
-  #dodge-bar.correct {
-    color: #2ecc71; border-color: #2ecc71;
-    background: rgba(46,204,113,0.18);
+  #dodge-bar .dodge-text {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    color: var(--text);
   }
-  #dodge-bar.wrong { color: #e74c3c; }
-  #dodge-bar small { display: block; font-size: 0.7rem; opacity: 0.6; font-weight: 400; }
+  #dodge-bar .dodge-track {
+    width: 100%;
+    height: 14px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+  }
+  #dodge-bar .dodge-ideal {
+    position: absolute;
+    left: 90%; width: 10%;
+    height: 100%;
+    background: rgba(16,185,129,0.4);
+    border-left: 2px solid var(--success);
+    border-right: 2px solid var(--success);
+  }
+  #dodge-bar .dodge-fill {
+    position: absolute;
+    left: 0;
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    border-radius: 999px;
+    transition: none;
+  }
+  #dodge-bar .dodge-hint {
+    font-size: 0.62rem;
+    opacity: 0.5;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+  }
+  #dodge-bar.overshoot { border-color: var(--danger); background: rgba(239,68,68,0.18); }
+  #dodge-bar.overshoot .dodge-fill { background: var(--danger); }
+  #dodge-bar.ready { border-color: var(--success); background: rgba(16,185,129,0.18); }
 
   /* Menu screens */
   .screen {
@@ -828,10 +885,89 @@
     color: var(--accent);
     font-variant-numeric: tabular-nums;
   }
+  .chart-card {
+    cursor: pointer;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .chart-card:hover {
+    border-color: var(--accent);
+    background: rgba(6,182,212,0.06);
+  }
   .chart-card canvas {
     display: block;
     width: 100%;
     height: 70px;
+    pointer-events: none;
+  }
+
+  /* Run history detail screen */
+  #history-screen .container {
+    max-width: 760px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px 32px;
+    box-shadow: var(--shadow-lg);
+  }
+  #history-screen h1 { text-align: left; margin-bottom: 4px; }
+  #history-screen .subtitle {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+  #history-screen .charts-row { margin-bottom: 18px; }
+  #history-screen .charts-row canvas { height: 110px; }
+  #history-screen table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  #history-screen th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    font-weight: 700;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  #history-screen td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.85rem;
+  }
+  #history-screen tr.latest {
+    background: rgba(6,182,212,0.08);
+  }
+  #history-screen tr.best {
+    color: var(--gold);
+  }
+  #history-screen .summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+  }
+  #history-screen .summary .stat .lbl {
+    display: block;
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+  }
+  #history-screen .summary .stat .val {
+    font-size: 1.2rem;
+    font-weight: 800;
   }
 
   .gameover-stats {
@@ -959,7 +1095,15 @@
 <div id="fps-counter">— FPS</div>
 <button id="btn-fullscreen" title="Fullscreen (F)">⛶</button>
 <div id="hs-toast"></div>
-<div id="dodge-bar"><span id="dodge-arrow">— STRAFE —</span><small>multiplier active when moving in direction</small></div>
+<div id="spawn-toast"></div>
+<div id="dodge-bar">
+  <div class="dodge-text" id="dodge-arrow">↔ STRAFE</div>
+  <div class="dodge-track">
+    <div class="dodge-ideal"></div>
+    <div class="dodge-fill" id="dodge-fill"></div>
+  </div>
+  <div class="dodge-hint">switch direction when bar reaches the green zone · ×2 multiplier</div>
+</div>
 
 <div id="weapon-hud">
   <span class="weapon-slot" data-w="hitscan"><b>1</b> Click Timing</span>
@@ -1177,6 +1321,35 @@
   <p class="big" id="cal-live">0 movement units</p>
   <p>Suggested in / 360°: <b id="cal-suggest">—</b></p>
   <small>ESC to cancel</small>
+</div>
+
+<!-- Run history drill-down -->
+<div id="history-screen" class="screen">
+  <div class="container">
+    <h1 id="history-title">Run History</h1>
+    <div class="subtitle" id="history-subtitle"></div>
+    <div class="summary" id="history-summary"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-label"><span>Score</span><span class="latest" id="hist-score-latest"></span></div>
+        <canvas id="hist-chart-score" width="640" height="110"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label"><span>Accuracy</span><span class="latest" id="hist-acc-latest"></span></div>
+        <canvas id="hist-chart-acc" width="640" height="110"></canvas>
+      </div>
+    </div>
+    <table id="history-table">
+      <thead>
+        <tr><th>#</th><th>Date</th><th>Score</th><th>Acc</th><th>Hits</th><th>HS</th><th>Mul</th><th>Streak</th></tr>
+      </thead>
+      <tbody id="history-rows"></tbody>
+    </table>
+    <div class="row" style="margin-top: 18px;">
+      <button class="btn primary" id="history-back">Back</button>
+      <button class="btn danger" id="history-clear">Clear History</button>
+    </div>
+  </div>
 </div>
 
 <!-- Game over overlay -->
@@ -1414,8 +1587,8 @@ function playSpawnAt(x, y, z) {
   p.panningModel = 'HRTF';
   p.distanceModel = 'inverse';
   p.refDistance = 1;
-  p.maxDistance = 50;
-  p.rolloffFactor = 1.4;
+  p.maxDistance = 60;
+  p.rolloffFactor = 1.2;
   if (p.positionX) {
     p.positionX.value = x;
     p.positionY.value = y;
@@ -1428,11 +1601,34 @@ function playSpawnAt(x, y, z) {
   o.frequency.exponentialRampToValueAtTime(1100, t + 0.07);
   o.frequency.exponentialRampToValueAtTime(700, t + 0.16);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(0.45 * vol(), t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  g.gain.exponentialRampToValueAtTime(0.85 * vol(), t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
   o.connect(g).connect(p).connect(audioCtx.destination);
   o.start(t);
-  o.stop(t + 0.2);
+  o.stop(t + 0.24);
+}
+
+// Show direction indicator if spawn is significantly off-axis from camera view
+const _spawnVec = new THREE.Vector3();
+function maybeShowSpawnDirection(x, y, z) {
+  _spawnVec.set(x, y, z);
+  camera.worldToLocal(_spawnVec);
+  // Camera local: -Z is forward, +X is right
+  const horizAngleDeg = Math.atan2(_spawnVec.x, -_spawnVec.z) * 180 / Math.PI;
+  const halfFov = (Settings.fov * 0.55); // a bit wider than FOV for "in view"
+  if (Math.abs(horizAngleDeg) <= halfFov && _spawnVec.z < 0) return;  // in front, in view
+  let label;
+  if (_spawnVec.z > 0) {
+    label = horizAngleDeg > 0 ? 'BEHIND ↘' : 'BEHIND ↙';
+  } else if (horizAngleDeg > 0) {
+    label = '→ RIGHT';
+  } else {
+    label = '← LEFT';
+  }
+  spawnToast.textContent = label;
+  spawnToast.classList.add('show');
+  clearTimeout(maybeShowSpawnDirection._t);
+  maybeShowSpawnDirection._t = setTimeout(() => spawnToast.classList.remove('show'), 700);
 }
 
 // Light tick sounds for tracking weapon (very short, low volume)
@@ -1462,6 +1658,7 @@ let shotsHit = 0;
 let headshots = 0;
 let streak = 0;
 let bestStreak = 0;
+let multiplierSum = 0;  // sum of movement multipliers across all kills (applied at end)
 let startTime = 0;
 let pausedAt = 0;
 let totalPausedMs = 0;
@@ -1478,10 +1675,11 @@ const enemies = [];
 const playerVel = new THREE.Vector3();
 const keys = {};
 
-// Dodge state
-let dodgeDir = 'left';
-let dodgeNextFlip = 0;
+// Dodge state — player-driven fill bar; switching at 90-100% earns max points
+let dodgeFill = 0;             // 0..1+, can overshoot
+let dodgeDuration = 1.5;       // seconds to reach 1.0 — varies per pattern
 let dodgeMul = 1;
+let dodgePrevStrafeKey = 'none';
 
 // Pursuer direction-bar state
 let pursuerDir = 'left';
@@ -1534,6 +1732,8 @@ const fsButton = $('btn-fullscreen');
 const hsToast = $('hs-toast');
 const dodgeBar = $('dodge-bar');
 const dodgeArrow = $('dodge-arrow');
+const dodgeFillEl = $('dodge-fill');
+const spawnToast = $('spawn-toast');
 const dirBar = $('dir-bar');
 const dirBarText = $('dir-bar-text');
 const dirBarFill = $('dir-bar-fill');
@@ -1810,6 +2010,7 @@ function placeEnemyOnPanel(e) {
   e.hp = e.hpMax;
   e.dirChangeTimer = diff.dirChangeMs * (0.5 + Math.random());
   playSpawnAt(e.group.position.x, e.group.position.y, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y, e.group.position.z);
 }
 
 function placeEnemyAroundPlayer(e) {
@@ -1826,6 +2027,7 @@ function placeEnemyAroundPlayer(e) {
   e.group.rotation.x = 0;
   e.hp = e.hpMax;
   playSpawnAt(e.group.position.x, e.group.position.y, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y, e.group.position.z);
 }
 
 function updateEnemies(dt) {
@@ -1966,6 +2168,7 @@ function placeCylinder(e) {
   e.strafeTimer = 0.6 + Math.random() * 1.4;
   e.vx = 0; e.vz = 0;
   playSpawnAt(e.group.position.x, e.group.position.y + CYL_BODY_HEIGHT / 2, e.group.position.z);
+  maybeShowSpawnDirection(e.group.position.x, e.group.position.y + CYL_BODY_HEIGHT / 2, e.group.position.z);
 }
 
 function updateCylinders(dt) {
@@ -2030,11 +2233,11 @@ function currentDifficulty() { return DIFFICULTY[Settings.difficulty] || DIFFICU
 
 function pickPursuerDuration() {
   const p = Settings.pursuerPattern || 'varied';
-  if (p === 'short')  return 0.9 + Math.random() * 0.5;  // 0.9–1.4s
-  if (p === 'medium') return 2.1 + Math.random() * 0.8;  // 2.1–2.9s
-  if (p === 'long')   return 3.8 + Math.random() * 1.4;  // 3.8–5.2s
+  if (p === 'short')  return 0.6 + Math.random() * 0.4;  // 0.6–1.0s
+  if (p === 'medium') return 1.2 + Math.random() * 0.6;  // 1.2–1.8s
+  if (p === 'long')   return 2.0 + Math.random() * 0.8;  // 2.0–2.8s
   // varied: full range
-  return 0.8 + Math.random() * 4.4;                       // 0.8–5.2s
+  return 0.6 + Math.random() * 2.2;                       // 0.6–2.8s
 }
 
 function playFlipBeep() {
@@ -2570,15 +2773,14 @@ function handleEnemyHit(enemy, part) {
   const isHead = part === 'head';
   const w = currentWeapon();
 
-  // Pole Practice: pole is invincible — every hit just scores with current pursuerMul
+  // Pole Practice: pole is invincible — every hit is +1 raw, multiplier accumulated
   if (enemy.pole) {
     pulseHitMarker(false);
     enemy.flashUntil = performance.now() + 90;
-    const pts = Math.max(1, Math.round(1 * pursuerMul));
-    score += pts;
+    score += 1;
+    multiplierSum += pursuerMul;
     scoreVal.textContent = score;
     playHit(false);
-    spawnDmgPopup(enemy.group.position.x, enemy.group.position.y + 0.4, enemy.group.position.z, '+' + pts, pursuerMul >= 2 ? 'kill' : '');
     return;
   }
 
@@ -2587,33 +2789,32 @@ function handleEnemyHit(enemy, part) {
   enemy.flashUntil = performance.now() + 90;
   pulseHitMarker(isHead);
 
-  // Anchor popup on the hit point
-  const popX = enemy.group.position.x;
-  const popY = enemy.group.position.y + (isHead ? 0.7 : 0.3);
-  const popZ = enemy.group.position.z;
-
   if (enemy.hp <= 0) {
-    let pts = isHead ? 2 : 1;
-    if (mode === 'dodge') pts = Math.round(pts * dodgeMul);
-    else if (mode === 'cylinder') pts = Math.round(pts * pursuerMul);
-    score += pts;
+    score += 1;
     if (isHead) headshots++;
+    let mul = 1;
+    if (mode === 'dodge') mul = dodgeMul;
+    else if (mode === 'cylinder') mul = pursuerMul;
+    multiplierSum += mul;
     scoreVal.textContent = score;
     playHit(isHead);
     if (isHead) showHsToast();
-    spawnDmgPopup(popX, popY, popZ, '+' + pts, 'kill');
 
-    if (mode === 'tracking') placeEnemyOnPanel(enemy);
-    else if (mode === 'dodge') placeEnemyAroundPlayer(enemy);
-    else if (mode === 'cylinder') placeCylinder(enemy);
+    if (mode === 'tracking') scheduleRespawn(enemy, 'tracking');
+    else if (mode === 'dodge') scheduleRespawn(enemy, 'dodge');
+    else if (mode === 'cylinder') scheduleRespawn(enemy, 'cylinder');
   } else if (w.auto) {
     playTrackingTick(true);
-    // Show a small ticking dmg number for tracking weapon
-    if (Math.random() < 0.3) spawnDmgPopup(popX, popY, popZ, '·', isHead ? 'head' : '');
   } else {
     HitSounds[Settings.hitsound]?.(0.7);
-    spawnDmgPopup(popX, popY, popZ, '-' + dmg, isHead ? 'head' : '');
   }
+}
+
+// Schedule a respawn 500ms after kill — hides target and triggers placement when timer elapses
+function scheduleRespawn(enemy, modeKind) {
+  enemy.group.visible = false;
+  enemy.respawnAt = performance.now() + 500;
+  enemy.respawnMode = modeKind;
 }
 
 // Static / classic / endurance / zen tap
@@ -2638,6 +2839,7 @@ function handleTap(index) {
   if (!gameActive) return;
   if (blackTiles.has(index)) {
     shotsHit++; score++;
+    multiplierSum += 1;
     bumpStreak();
     pulseHitMarker(false);
     scoreVal.textContent = score;
@@ -2646,8 +2848,6 @@ function handleTap(index) {
     flashTile(index, COLOR_GREEN);
     placeBlackTiles(1, index);
     playHit(false);
-    const t = tileMeshes[index];
-    spawnDmgPopup(t.position.x, t.position.y, t.position.z, '+1', 'kill');
     if (mode === 'classic' && score >= CLASSIC_TARGET) gameOver(true);
   } else {
     flashTile(index, COLOR_RED);
@@ -2663,6 +2863,7 @@ function handleFlickHit(index) {
   if (!gameActive) return;
   if (blackTiles.has(index)) {
     shotsHit++; score++;
+    multiplierSum += 1;
     bumpStreak();
     pulseHitMarker(false);
     scoreVal.textContent = score;
@@ -2671,8 +2872,6 @@ function handleFlickHit(index) {
     flashTile(index, COLOR_GREEN);
     placeBlackTiles(1, index);
     playHit(false);
-    const t = tileMeshes[index];
-    spawnDmgPopup(t.position.x, t.position.y, t.position.z, '+1', 'kill');
   } else {
     playMiss();
     breakStreak();
@@ -2706,6 +2905,19 @@ function animate(now) {
   if (gameActive && !gamePaused) {
     if (mode === 'tracking') updateEnemies(dt);
     else if (mode === 'cylinder') updateCylinders(dt);
+  }
+
+  // Pending respawns (0.5s delay after a kill)
+  if (gameActive && !gamePaused) {
+    for (const e of enemies) {
+      if (e.respawnAt && now >= e.respawnAt) {
+        e.respawnAt = 0;
+        e.group.visible = true;
+        if (e.respawnMode === 'tracking') placeEnemyOnPanel(e);
+        else if (e.respawnMode === 'dodge') placeEnemyAroundPlayer(e);
+        else if (e.respawnMode === 'cylinder') placeCylinder(e);
+      }
+    }
   }
 
   // Enemy flash decay
@@ -2800,19 +3012,36 @@ function animate(now) {
     dirBar.classList.toggle('wrong',   !correct && (left || right));
   }
 
-  // Dodge bar update
+  // Dodge bar update — player-driven fill, switching at 90-100% earns max points
   if (mode === 'dodge' && gameActive && !gamePaused) {
-    if (now > dodgeNextFlip) {
-      dodgeDir = Math.random() < 0.5 ? 'left' : 'right';
-      dodgeNextFlip = now + 1500 + Math.random() * 1000;
-    }
+    dodgeFill += dt / dodgeDuration;
+
     const left  = !!keys['KeyA'] && !keys['KeyD'];
     const right = !!keys['KeyD'] && !keys['KeyA'];
-    const correct = (dodgeDir === 'left' && left) || (dodgeDir === 'right' && right);
-    dodgeMul = correct ? 2 : (left || right ? 1 : 0.5);
-    dodgeArrow.textContent = (dodgeDir === 'left' ? '← STRAFE LEFT' : 'STRAFE RIGHT →');
-    dodgeBar.classList.toggle('correct', correct);
-    dodgeBar.classList.toggle('wrong', !correct && !!(left || right));
+    const strafeKey = left ? 'left' : (right ? 'right' : 'none');
+
+    if (strafeKey !== dodgePrevStrafeKey && strafeKey !== 'none' && dodgePrevStrafeKey !== 'none') {
+      // Player switched direction — evaluate fill at this moment
+      const f = dodgeFill;
+      let earnedMul;
+      if (f < 0.10)        earnedMul = 0;
+      else if (f < 0.90)   earnedMul = 0.4 + ((f - 0.10) / 0.80) * 1.6;  // 0.4 → 2.0
+      else if (f <= 1.10)  earnedMul = 2.0;                               // perfect window
+      else                  earnedMul = 0.4;                              // overshoot
+      dodgeMul = earnedMul;
+      dodgeFill = 0;
+      dodgeDuration = pickPursuerDuration();
+    }
+    dodgePrevStrafeKey = strafeKey;
+
+    // Visual update
+    const visualFill = Math.min(1, dodgeFill);
+    dodgeFillEl.style.width = (visualFill * 100) + '%';
+    const inIdeal = dodgeFill >= 0.90 && dodgeFill <= 1.10;
+    const overshoot = dodgeFill > 1.10;
+    dodgeBar.classList.toggle('ready', inIdeal && !overshoot);
+    dodgeBar.classList.toggle('overshoot', overshoot);
+    dodgeArrow.textContent = strafeKey === 'left' ? '◀ STRAFING LEFT' : strafeKey === 'right' ? 'STRAFING RIGHT ▶' : '◀ A · D ▶';
   }
 
   renderer.render(scene, camera);
@@ -2877,6 +3106,7 @@ function startGame(m) {
   mode = m;
   score = 0; shotsFired = 0; shotsHit = 0; headshots = 0;
   streak = 0; bestStreak = 0;
+  multiplierSum = 0;
   updateStreak();
   gameActive = true;
   gamePaused = false;
@@ -2933,6 +3163,7 @@ function startGame(m) {
     backWall.visible = false;
     dodgeRoom.visible = true;
     dodgeBar.classList.add('show');
+    dodgeBar.classList.remove('ready', 'overshoot');
     pitch = 0;
     const diff = currentDifficulty();
     const targetCount = 6;
@@ -2942,7 +3173,10 @@ function startGame(m) {
     }
     timerDuration = DODGE_DURATION;
     timerDisplay.style.display = 'inline';
-    dodgeNextFlip = 0;
+    dodgeFill = 0;
+    dodgeDuration = pickPursuerDuration();
+    dodgeMul = 1;
+    dodgePrevStrafeKey = 'none';
   } else if (mode === 'cylinder') {
     for (const t of tileMeshes) t.visible = false;
     backWall.visible = false;
@@ -3041,6 +3275,11 @@ function gameOver(won) {
   const elapsed = elapsedSeconds().toFixed(2);
   const acc = shotsFired === 0 ? 0 : Math.round((shotsHit / shotsFired) * 100);
 
+  // Apply movement multiplier to compute weighted final score
+  const avgMul = score > 0 ? (multiplierSum / score) : 1;
+  const weightedFinal = Math.round(multiplierSum);
+  const usesMul = (mode === 'dodge' || mode === 'cylinder' || mode === 'pole');
+
   let bestKey, bestVal, lower = false;
   let title = 'Game Over';
   let titleClass = '';
@@ -3072,20 +3311,20 @@ function gameOver(won) {
     bestKey = 'tracking'; bestVal = score;
   } else if (mode === 'dodge') {
     title = 'Time Up'; titleClass = 'complete';
-    headline = score; headSub = `${headshots} Headshots`;
-    bestKey = 'dodge'; bestVal = score;
+    headline = weightedFinal; headSub = `${score} hits · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'dodge'; bestVal = weightedFinal;
   } else if (mode === 'flicks') {
     title = 'Time Up'; titleClass = 'complete';
     headline = score; headSub = 'Targets';
     bestKey = 'flicks'; bestVal = score;
   } else if (mode === 'cylinder') {
     title = 'Time Up'; titleClass = 'complete';
-    headline = score; headSub = `${headshots} Headshots`;
-    bestKey = 'cylinder'; bestVal = score;
+    headline = weightedFinal; headSub = `${score} hits · ${headshots} HS · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'cylinder'; bestVal = weightedFinal;
   } else if (mode === 'pole') {
     title = 'Time Up'; titleClass = 'complete';
-    headline = score; headSub = 'Pole Hits';
-    bestKey = 'pole'; bestVal = score;
+    headline = weightedFinal; headSub = `${score} hits · ×${avgMul.toFixed(2)} avg`;
+    bestKey = 'pole'; bestVal = weightedFinal;
   }
 
   overTitle.textContent = title;
@@ -3136,6 +3375,8 @@ function gameOver(won) {
   let history = [];
   if (bestKey) {
     const fullKey = bestKey + '-' + Settings.difficulty;
+    lastHistoryKey = fullKey;
+    lastHistoryLower = lower;
     const stored = localStorage.getItem('best_' + fullKey);
     const prevBest = stored ? parseFloat(stored) : null;
     if (prevBest === null) {
@@ -3166,9 +3407,14 @@ function gameOver(won) {
       }
     }
     // Persist this run to history (separate from PB)
+    const histScore = lower ? parseFloat(elapsed) : (usesMul ? weightedFinal : score);
     history = pushRunHistory(fullKey, {
-      score: lower ? parseFloat(elapsed) : score,
+      score: histScore,
       acc,
+      hits: score,
+      headshots,
+      mul: avgMul,
+      streak: bestStreak,
       ts: Date.now()
     });
   }
@@ -3409,6 +3655,105 @@ $('pause-menu-btn').onclick  = quitToMenu;
 // Game over buttons
 $('btn-retry').onclick = () => startGame(mode);
 $('btn-menu').onclick  = showMainMenu;
+
+// ============================================================================
+// Run history drill-down
+// ============================================================================
+let lastHistoryKey = null;
+let lastHistoryLower = false;
+
+function openHistory() {
+  if (!lastHistoryKey) return;
+  const arr = getRunHistory(lastHistoryKey);
+  const lower = lastHistoryLower;
+  $('history-title').textContent = 'Run History';
+  $('history-subtitle').textContent = lastHistoryKey.replace(/-/g, ' · ');
+
+  // Summary
+  const summary = $('history-summary');
+  if (arr.length === 0) {
+    summary.innerHTML = '<div class="stat"><span class="lbl">No runs yet</span></div>';
+  } else {
+    const scores = arr.map(r => r.score);
+    const accs = arr.map(r => r.acc);
+    const best = lower ? Math.min(...scores) : Math.max(...scores);
+    const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+    const avgAcc = accs.reduce((a,b)=>a+b,0) / accs.length;
+    summary.innerHTML = `
+      <div class="stat"><span class="lbl">Runs</span><span class="val">${arr.length}</span></div>
+      <div class="stat"><span class="lbl">Best</span><span class="val">${lower ? best.toFixed(2) + 's' : best}</span></div>
+      <div class="stat"><span class="lbl">Avg</span><span class="val">${lower ? avg.toFixed(2) + 's' : Math.round(avg)}</span></div>
+      <div class="stat"><span class="lbl">Avg Acc</span><span class="val">${Math.round(avgAcc)}%</span></div>
+    `;
+  }
+
+  // Charts (larger versions of the gameover charts)
+  const scoreCanvas = $('hist-chart-score');
+  const accCanvas = $('hist-chart-acc');
+  if (arr.length > 0) {
+    const scoreVals = arr.map(r => r.score);
+    const accVals = arr.map(r => r.acc);
+    drawLineChart(scoreCanvas, scoreVals, '#06b6d4', { overlay: rollingAverage(scoreVals, 5) });
+    drawLineChart(accCanvas,  accVals,  '#10b981', { fixedMin: 0, fixedMax: 100, overlay: rollingAverage(accVals, 5) });
+    const lastS = scoreVals[scoreVals.length - 1];
+    $('hist-score-latest').textContent = lower ? lastS.toFixed(2) + 's' : lastS;
+    $('hist-acc-latest').textContent = (accVals[accVals.length - 1] || 0) + '%';
+  } else {
+    [scoreCanvas, accCanvas].forEach(c => c.getContext('2d').clearRect(0,0,c.width,c.height));
+    $('hist-score-latest').textContent = '';
+    $('hist-acc-latest').textContent = '';
+  }
+
+  // Table
+  const tbody = $('history-rows');
+  tbody.innerHTML = '';
+  if (arr.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:18px;">No runs recorded yet</td></tr>';
+  } else {
+    const scores = arr.map(r => r.score);
+    const bestVal = lower ? Math.min(...scores) : Math.max(...scores);
+    const lastIdx = arr.length - 1;
+    arr.slice().reverse().forEach((r, i) => {
+      const idx = arr.length - i;
+      const isLatest = (i === 0);
+      const isBest = (r.score === bestVal);
+      const date = new Date(r.ts);
+      const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const row = document.createElement('tr');
+      if (isLatest) row.classList.add('latest');
+      if (isBest)   row.classList.add('best');
+      row.innerHTML = `
+        <td>${idx}</td>
+        <td>${dateStr}</td>
+        <td>${lower ? r.score.toFixed(2) + 's' : r.score}</td>
+        <td>${r.acc}%</td>
+        <td>${r.hits ?? '—'}</td>
+        <td>${r.headshots ?? '—'}</td>
+        <td>${r.mul != null ? '×' + r.mul.toFixed(2) : '—'}</td>
+        <td>${r.streak ?? '—'}</td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
+
+  showOnly($('history-screen'));
+}
+
+$('history-back').onclick = () => {
+  // Return to game over overlay
+  showOnly(overlayScreen);
+};
+$('history-clear').onclick = () => {
+  if (!lastHistoryKey) return;
+  if (confirm('Clear all runs for ' + lastHistoryKey + '?')) {
+    localStorage.removeItem(HISTORY_PREFIX + lastHistoryKey);
+    openHistory();
+  }
+};
+
+// Wire chart cards to open history
+$('chart-score').parentElement.addEventListener('click', openHistory);
+$('chart-acc').parentElement.addEventListener('click', openHistory);
 
 // ============================================================================
 // First-run sensitivity prompt
