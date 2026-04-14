@@ -846,6 +846,46 @@
   .diff-btn.diff-hard.active   { background: #ef4444; color: #1a0606; box-shadow: 0 0 18px rgba(239,68,68,0.35); }
   .diff-btn.diff-custom.active { background: #fbbf24; color: #1a1206; box-shadow: 0 0 18px rgba(251,191,36,0.35); }
 
+  .pause-bests {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .pause-bests .pb-cell {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 8px 6px;
+    text-align: center;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .pause-bests .pb-cell.selected {
+    border-color: var(--accent);
+    background: rgba(6,182,212,0.10);
+  }
+  .pause-bests .pb-cell .lbl {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    font-weight: 700;
+  }
+  .pause-bests .pb-cell .val {
+    font-size: 1rem;
+    font-weight: 800;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pause-bests .pb-cell.empty .val { color: var(--text-dim); font-weight: 500; }
+
+  .preset-btn {
+    padding: 6px 12px !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
   .pause-actions {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1497,6 +1537,8 @@
       <button class="diff-btn diff-custom" data-pause-diff="custom">Custom</button>
     </div>
 
+    <div class="pause-bests" id="pause-bests"></div>
+
     <div class="stats-grid" id="pause-stats">
       <div><div class="label">Score</div><div class="value" id="pause-score">0</div></div>
       <div><div class="label">Time</div><div class="value" id="pause-time">0.0</div></div>
@@ -1504,28 +1546,30 @@
       <div><div class="label">Hits / Shots</div><div class="value" id="pause-hits">0/0</div></div>
     </div>
 
-    <details class="sd-customize" id="pause-customize">
-      <summary>⚙ Customize Scenario</summary>
-      <div class="sd-customize-body">
-        <p class="sd-cust-hint">Tweak then press <b>Apply & Restart</b> to play with the new settings (custom highscore table).</p>
-        <div class="field"><label>Target size</label>
-          <input type="range" id="pc-size" min="0.4" max="2.0" step="0.05">
-          <span class="value" id="pc-size-v">×1.00</span>
-        </div>
-        <div class="field"><label>Target speed</label>
-          <input type="range" id="pc-speed" min="0.4" max="2.5" step="0.05">
-          <span class="value" id="pc-speed-v">×1.00</span>
-        </div>
-        <div class="field"><label>Direction-change rate</label>
-          <input type="range" id="pc-dir" min="0.4" max="2.5" step="0.05">
-          <span class="value" id="pc-dir-v">×1.00</span>
-        </div>
-        <div class="row" style="margin-top:10px; justify-content:flex-start;">
-          <button class="btn primary" id="pc-apply">Apply & Restart</button>
-          <button class="btn muted" id="pc-reset">Reset</button>
-        </div>
+    <div class="sd-customize-body" id="pause-customize-body" style="display:none;">
+      <p class="sd-cust-hint">Adjust then press <b>Play Custom</b> below to start with new settings.</p>
+      <div class="row" style="gap:6px; margin-bottom:10px;">
+        <span style="font-size:0.7rem; opacity:0.6; text-transform:uppercase; letter-spacing:1.4px; margin-right:4px;">Load:</span>
+        <button class="btn muted preset-btn" data-preset="easy">Easy</button>
+        <button class="btn muted preset-btn" data-preset="normal">Normal</button>
+        <button class="btn muted preset-btn" data-preset="hard">Hard</button>
       </div>
-    </details>
+      <div class="field"><label>Target size</label>
+        <input type="range" id="pc-size" min="0.4" max="2.0" step="0.05">
+        <span class="value" id="pc-size-v">×1.00</span>
+      </div>
+      <div class="field"><label>Target speed</label>
+        <input type="range" id="pc-speed" min="0.4" max="2.5" step="0.05">
+        <span class="value" id="pc-speed-v">×1.00</span>
+      </div>
+      <div class="field"><label>Direction-change rate</label>
+        <input type="range" id="pc-dir" min="0.4" max="2.5" step="0.05">
+        <span class="value" id="pc-dir-v">×1.00</span>
+      </div>
+      <div class="row" style="margin-top:10px; justify-content:flex-start;">
+        <button class="btn muted" id="pc-reset">Reset</button>
+      </div>
+    </div>
 
     <div class="pause-actions">
       <button class="btn primary" id="pause-resume">▶ Resume</button>
@@ -2041,19 +2085,23 @@ function maybeShowSpawnDirection(x, y, z) {
   maybeShowSpawnDirection._t = setTimeout(() => spawnToast.classList.remove('show'), 700);
 }
 
-// Light tick sounds for tracking weapon — deeper, softer pop
+// Tracking weapon ticks — very soft, low-frequency sine with gentle attack/release.
+// Misses are nearly silent so sustained fire isn't fatiguing.
 function playTrackingTick(hit) {
   if (!audioCtx) return;
+  if (!hit) return;  // no sound on tracking misses — too noisy when held
   const t = audioCtx.currentTime;
   const o = audioCtx.createOscillator();
   const g = audioCtx.createGain();
   o.type = 'sine';
-  o.frequency.setValueAtTime(hit ? 380 : 160, t);
-  if (hit) o.frequency.exponentialRampToValueAtTime(220, t + 0.03);
-  g.gain.setValueAtTime((hit ? 0.08 : 0.04) * vol(), t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+  o.frequency.setValueAtTime(280, t);
+  o.frequency.exponentialRampToValueAtTime(200, t + 0.05);
+  // Gentle attack to avoid clicky onset, exponential release
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.035 * vol(), t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
   o.connect(g).connect(audioCtx.destination);
-  o.start(t); o.stop(t + 0.05);
+  o.start(t); o.stop(t + 0.07);
 }
 
 // ============================================================================
@@ -3816,6 +3864,10 @@ function startGame(m, lockedWeapon = null) {
   requestLock();
 }
 
+// Preview difficulty in the pause menu (independent of the actual run difficulty)
+let pausePreviewDiff = 'normal';
+let pauseRunDiff = 'normal';  // the difficulty the player is *actually* playing
+
 function pauseGame() {
   if (!gameActive || gamePaused) return;
   gamePaused = true;
@@ -3825,24 +3877,15 @@ function pauseGame() {
   // Header — show scenario name + current scoring table label
   const info = SCENARIO_INFO[mode];
   $('pause-title').textContent = info ? info.title : (mode || 'Scenario');
+  pauseRunDiff = activeCustomMode ? 'custom' : Settings.difficulty;
+  pausePreviewDiff = pauseRunDiff;
   const niceWeapon = Settings.weapon === 'tracking' ? 'Track' : 'Click';
-  const niceDiff = activeCustomMode ? 'Custom' : (Settings.difficulty.charAt(0).toUpperCase() + Settings.difficulty.slice(1));
-  $('pause-eyebrow').textContent = `Paused · ${niceDiff} · ${niceWeapon}`;
+  const niceRunDiff = pauseRunDiff.charAt(0).toUpperCase() + pauseRunDiff.slice(1);
+  $('pause-eyebrow').textContent = `Paused · ${niceRunDiff} · ${niceWeapon}`;
 
-  // Difficulty buttons reflect current state
-  syncPauseDifficulty();
-
-  // Customize sliders sync to current scenario's saved cfg
-  if (mode && Settings.customScenarios[mode]) {
-    const cfg = Settings.customScenarios[mode];
-    $('pc-size').value = cfg.size;
-    $('pc-size-v').textContent = '×' + Number(cfg.size).toFixed(2);
-    $('pc-speed').value = cfg.speed;
-    $('pc-speed-v').textContent = '×' + Number(cfg.speed).toFixed(2);
-    $('pc-dir').value = cfg.dir;
-    $('pc-dir-v').textContent = '×' + Number(cfg.dir).toFixed(2);
-    if (activeCustomMode) $('pause-customize').setAttribute('open', '');
-  }
+  // Sync customize sliders + bests + difficulty buttons + bests grid + resume label
+  syncCustomizeSliders();
+  refreshPausePreview();
 
   // Update stats display
   $('pause-score').textContent = score;
@@ -3860,59 +3903,88 @@ function pauseGame() {
   showOnly(pauseScreen);
 }
 
-function syncPauseDifficulty() {
+// Refresh pause UI to reflect the current preview difficulty selection
+function refreshPausePreview() {
+  // Difficulty button highlights
   for (const b of document.querySelectorAll('[data-pause-diff]')) {
-    const want = b.dataset.pauseDiff;
-    const isCurrent = activeCustomMode ? want === 'custom' : (want === Settings.difficulty);
-    b.classList.toggle('active', isCurrent);
+    b.classList.toggle('active', b.dataset.pauseDiff === pausePreviewDiff);
+  }
+  // Bests grid
+  const bestsEl = $('pause-bests');
+  bestsEl.innerHTML = '';
+  const diffs = ['easy', 'normal', 'hard', 'custom'];
+  for (const d of diffs) {
+    const key = mode + '-' + d + '-' + Settings.weapon;
+    const stored = localStorage.getItem('best2_' + key);
+    const v = stored ? parseFloat(stored) : null;
+    const cell = document.createElement('div');
+    cell.className = 'pb-cell' + (v === null ? ' empty' : '') + (d === pausePreviewDiff ? ' selected' : '');
+    const niceD = d.charAt(0).toUpperCase() + d.slice(1);
+    cell.innerHTML = `<div class="lbl">${niceD}</div><div class="val">${v !== null ? (Number.isInteger(v) ? v : v.toFixed(2)) : '—'}</div>`;
+    bestsEl.appendChild(cell);
+  }
+  // Customize section visibility — only under Custom
+  $('pause-customize-body').style.display = (pausePreviewDiff === 'custom') ? 'block' : 'none';
+  // Resume button label — Resume if same as run, "Play X" if different
+  const resumeBtn = $('pause-resume');
+  if (pausePreviewDiff === pauseRunDiff) {
+    resumeBtn.textContent = '▶ Resume';
+  } else {
+    const niceP = pausePreviewDiff.charAt(0).toUpperCase() + pausePreviewDiff.slice(1);
+    resumeBtn.textContent = '▶ Play ' + niceP;
   }
 }
 
-// Pause menu difficulty buttons — switch + restart
+function syncCustomizeSliders() {
+  if (!mode || !Settings.customScenarios[mode]) return;
+  const cfg = Settings.customScenarios[mode];
+  $('pc-size').value = cfg.size;
+  $('pc-size-v').textContent = '×' + Number(cfg.size).toFixed(2);
+  $('pc-speed').value = cfg.speed;
+  $('pc-speed-v').textContent = '×' + Number(cfg.speed).toFixed(2);
+  $('pc-dir').value = cfg.dir;
+  $('pc-dir-v').textContent = '×' + Number(cfg.dir).toFixed(2);
+}
+
+// Pause menu difficulty buttons — preview only, don't restart
 for (const b of document.querySelectorAll('[data-pause-diff]')) {
   b.addEventListener('click', () => {
-    const want = b.dataset.pauseDiff;
-    if (want === 'custom') {
-      // Enable custom mode for this scenario; open the customize section
-      if (mode && Settings.customScenarios[mode]) {
-        Settings.customScenarios[mode].enabled = true;
-        saveSettings();
-        $('pause-customize').setAttribute('open', '');
-      }
-      // Apply immediately and restart
-      applyCustomAndRestart();
-    } else {
-      Settings.difficulty = want;
-      saveSettings();
-      activeCustomMode = false;
-      activeCustomCfg = null;
-      syncPauseDifficulty();
-      syncDifficultyButtons();
-      // Restart with new difficulty
-      const w = weaponLocked ? Settings.weapon : null;
-      gamePaused = false;
-      startGame(mode, w);
-    }
+    pausePreviewDiff = b.dataset.pauseDiff;
+    refreshPausePreview();
   });
 }
 
-function applyCustomAndRestart() {
-  if (!mode) return;
-  const cfg = Settings.customScenarios[mode];
-  if (!cfg) return;
-  cfg.enabled = true;
-  cfg.size = parseFloat($('pc-size').value);
-  cfg.speed = parseFloat($('pc-speed').value);
-  cfg.dir = parseFloat($('pc-dir').value);
-  saveSettings();
-  activeCustomMode = true;
-  activeCustomCfg = { size: cfg.size, speed: cfg.speed, dir: cfg.dir };
+// Resume button — either truly resume or start a new run with the preview difficulty
+function handleResumeClick() {
+  if (pausePreviewDiff === pauseRunDiff) {
+    // Same difficulty — proper resume
+    resumeGame();
+    return;
+  }
+  // Different difficulty — start a fresh scenario with the new selection
+  if (pausePreviewDiff === 'custom') {
+    // Apply current slider values + start
+    const cfg = Settings.customScenarios[mode];
+    cfg.size = parseFloat($('pc-size').value);
+    cfg.speed = parseFloat($('pc-speed').value);
+    cfg.dir = parseFloat($('pc-dir').value);
+    cfg.enabled = true;
+    saveSettings();
+    activeCustomMode = true;
+    activeCustomCfg = { size: cfg.size, speed: cfg.speed, dir: cfg.dir };
+  } else {
+    Settings.difficulty = pausePreviewDiff;
+    saveSettings();
+    activeCustomMode = false;
+    activeCustomCfg = null;
+    syncDifficultyButtons();
+  }
   gamePaused = false;
   const w = weaponLocked ? Settings.weapon : null;
   startGame(mode, w);
 }
 
-// Wire pause customize sliders
+// Wire pause customize sliders (preview only — applied on resume click)
 function bindPauseSlider(id, vId, key) {
   const el = $(id);
   const lbl = $(vId);
@@ -3929,14 +4001,27 @@ bindPauseSlider('pc-size', 'pc-size-v', 'size');
 bindPauseSlider('pc-speed', 'pc-speed-v', 'speed');
 bindPauseSlider('pc-dir', 'pc-dir-v', 'dir');
 
-$('pc-apply').onclick = applyCustomAndRestart;
+// Preset-load buttons inside the customize section — fill sliders with that preset's values
+for (const pb of document.querySelectorAll('.preset-btn')) {
+  pb.addEventListener('click', () => {
+    const preset = pb.dataset.preset;
+    const d = DIFFICULTY[preset];
+    if (!d || !mode) return;
+    const cfg = Settings.customScenarios[mode];
+    cfg.size = d.targetScale;
+    cfg.speed = d.speedMul;
+    // dirChange ratio — easy slows direction changes, hard speeds them up
+    cfg.dir = preset === 'easy' ? 0.7 : preset === 'hard' ? 1.5 : 1.0;
+    saveSettings();
+    syncCustomizeSliders();
+  });
+}
+
 $('pc-reset').onclick = () => {
   if (!mode) return;
   Settings.customScenarios[mode] = { size: 1, speed: 1, dir: 1, enabled: false };
   saveSettings();
-  $('pc-size').value = 1; $('pc-size-v').textContent = '×1.00';
-  $('pc-speed').value = 1; $('pc-speed-v').textContent = '×1.00';
-  $('pc-dir').value = 1; $('pc-dir-v').textContent = '×1.00';
+  syncCustomizeSliders();
 };
 
 function resumeGame() {
@@ -4488,7 +4573,7 @@ syncDifficultyButtons();
 $('btn-settings').onclick = openSettings;
 
 // Pause menu buttons
-$('pause-resume').onclick    = resumeGame;
+$('pause-resume').onclick    = handleResumeClick;
 $('pause-restart').onclick   = () => { const w = weaponLocked ? Settings.weapon : null; resumeGame(); startGame(mode, w); };
 $('pause-settings').onclick  = openSettings;
 $('pause-fullscreen').onclick = toggleFullscreen;
