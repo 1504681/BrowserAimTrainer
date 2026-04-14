@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Don't Tap the White Tile — 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+
+  #game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 520px;
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  #stats {
+    display: flex;
+    justify-content: space-between;
+    width: 92vmin;
+    max-width: 500px;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+  }
+
+  #stats span {
+    background: rgba(255,255,255,0.1);
+    padding: 6px 14px;
+    border-radius: 8px;
+  }
+
+  #scene-wrap {
+    width: 92vmin;
+    max-width: 500px;
+    height: 92vmin;
+    max-height: 500px;
+    position: relative;
+  }
+
+  #scene-wrap canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    touch-action: none;
+  }
+
+  /* Menu */
+  #menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #menu button {
+    width: 240px;
+    padding: 14px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  #menu button:active { transform: scale(0.97); }
+
+  #btn-classic   { background: #0f3460; color: #fff; }
+  #btn-endurance { background: #533483; color: #fff; }
+  #btn-zen       { background: #e94560; color: #fff; }
+
+  .mode-desc {
+    font-size: 0.78rem;
+    opacity: 0.7;
+    font-weight: 400;
+  }
+
+  #overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85);
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 10;
+  }
+
+  #overlay.show { display: flex; }
+  #overlay h2 { font-size: 2rem; }
+  #overlay p  { font-size: 1.2rem; opacity: 0.9; }
+
+  #overlay button {
+    padding: 12px 36px;
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  #btn-retry { background: #0f3460; color: #fff; }
+  #btn-menu  { background: #533483; color: #fff; }
+
+  #best-score {
+    font-size: 0.95rem;
+    opacity: 0.7;
+  }
+
+  .badge {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    background: #e94560;
+    border-radius: 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+</style>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="game-container">
+  <h1>Don't Tap the White Tile<span class="badge">3D</span></h1>
+
+  <div id="menu">
+    <button id="btn-classic">Classic<br><span class="mode-desc">Tap 50 black tiles as fast as you can</span></button>
+    <button id="btn-endurance">Endurance<br><span class="mode-desc">Survive as long as you can — 60 seconds</span></button>
+    <button id="btn-zen">Zen<br><span class="mode-desc">No timer, no pressure — just tap</span></button>
+  </div>
+
+  <div id="game" style="display:none;">
+    <div id="stats">
+      <span id="score-display">Score: 0</span>
+      <span id="timer-display" style="display:none;">Time: 0.00</span>
+    </div>
+    <div id="scene-wrap"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <h2 id="over-title">Game Over</h2>
+  <p id="over-score"></p>
+  <p id="over-time"></p>
+  <p id="best-score"></p>
+  <button id="btn-retry">Play Again</button>
+  <button id="btn-menu">Menu</button>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ===== Game constants =====
+const NUM_BLACK = 3;
+const GRID_SIZE = 16;
+const CLASSIC_TARGET = 50;
+const ENDURANCE_TIME = 60;
+
+// ===== Game state =====
+let tileMeshes = [];
+let tileEdges = [];
+let blackTiles = new Set();
+let score = 0;
+let mode = '';
+let gameActive = false;
+let timerInterval = null;
+let startTime = 0;
+let timeLeft = 0;
+
+// Tap animation state per tile (pressY, flashTimer, flashColor)
+const tileAnim = Array.from({ length: GRID_SIZE }, () => ({
+  press: 0, flashUntil: 0, flashColor: null
+}));
+
+// ===== DOM refs =====
+const sceneWrap = document.getElementById('scene-wrap');
+const menu = document.getElementById('menu');
+const gameDiv = document.getElementById('game');
+const scoreDisplay = document.getElementById('score-display');
+const timerDisplay = document.getElementById('timer-display');
+const overlay = document.getElementById('overlay');
+const overTitle = document.getElementById('over-title');
+const overScore = document.getElementById('over-score');
+const overTime = document.getElementById('over-time');
+const bestScoreEl = document.getElementById('best-score');
+
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dragstart', e => e.preventDefault());
+
+// ===== Three.js setup =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+camera.position.set(0, 5.2, 5.2);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sceneWrap.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+dirLight.position.set(-3, 8, 4);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 30;
+dirLight.shadow.camera.left = -6;
+dirLight.shadow.camera.right = 6;
+dirLight.shadow.camera.top = 6;
+dirLight.shadow.camera.bottom = -6;
+scene.add(dirLight);
+
+// Floor (catches shadows, gives depth context)
+const floorMat = new THREE.ShadowMaterial({ opacity: 0.45 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.15;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// ===== Tile geometry =====
+const TILE_SIZE = 1.0;
+const TILE_HEIGHT = 0.22;
+const GAP = 0.08;
+const STEP = TILE_SIZE + GAP;
+const GRID_OFFSET = -((4 - 1) * STEP) / 2;
+
+const COLOR_INACTIVE = new THREE.Color(0x0a0a0a);
+const COLOR_ACTIVE   = new THREE.Color(0x1a1a1a);
+const COLOR_GREEN    = new THREE.Color(0x2ecc71);
+const COLOR_RED      = new THREE.Color(0xe74c3c);
+const EDGE_DIM       = new THREE.Color(0x222222);
+const EDGE_BRIGHT    = new THREE.Color(0xbbbbbb);
+
+const tileGeo = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
+const edgeGeo = new THREE.EdgesGeometry(tileGeo);
+
+for (let i = 0; i < GRID_SIZE; i++) {
+  const row = Math.floor(i / 4);
+  const col = i % 4;
+  const x = GRID_OFFSET + col * STEP;
+  const z = GRID_OFFSET + row * STEP;
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: COLOR_INACTIVE,
+    metalness: 0.1,
+    roughness: 0.7
+  });
+  const mesh = new THREE.Mesh(tileGeo, mat);
+  mesh.position.set(x, 0, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.index = i;
+  scene.add(mesh);
+  tileMeshes.push(mesh);
+
+  const edgeMat = new THREE.LineBasicMaterial({ color: EDGE_DIM });
+  const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+  mesh.add(edges);
+  tileEdges.push(edgeMat);
+}
+
+// ===== Resize handling =====
+function resize() {
+  const rect = sceneWrap.getBoundingClientRect();
+  renderer.setSize(rect.width, rect.height, false);
+  camera.aspect = rect.width / rect.height;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(sceneWrap);
+window.addEventListener('resize', resize);
+
+// ===== Hit detection =====
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (!gameActive) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(tileMeshes, false);
+  if (hits.length > 0) {
+    handleTap(hits[0].object.userData.index);
+  }
+});
+
+// ===== Render loop =====
+let lastTime = performance.now();
+function animate(now) {
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const mesh = tileMeshes[i];
+    const anim = tileAnim[i];
+    const isBlack = blackTiles.has(i);
+
+    // Target Y: active tiles raised, inactive flat. Press animation overrides briefly.
+    const baseY = isBlack ? 0.1 : 0;
+    let targetY = baseY - anim.press;
+    mesh.position.y += (targetY - mesh.position.y) * Math.min(1, dt * 18);
+
+    // Decay press
+    if (anim.press > 0) {
+      anim.press = Math.max(0, anim.press - dt * 3);
+    }
+
+    // Color & edge update (with flash)
+    const flashing = now < anim.flashUntil;
+    if (flashing) {
+      mesh.material.color.copy(anim.flashColor);
+      tileEdges[i].color.copy(anim.flashColor);
+    } else {
+      mesh.material.color.copy(isBlack ? COLOR_ACTIVE : COLOR_INACTIVE);
+      tileEdges[i].color.copy(isBlack ? EDGE_BRIGHT : EDGE_DIM);
+    }
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// ===== Game logic (mirrors index.html) =====
+document.getElementById('btn-classic').onclick   = () => startGame('classic');
+document.getElementById('btn-endurance').onclick = () => startGame('endurance');
+document.getElementById('btn-zen').onclick       = () => startGame('zen');
+document.getElementById('btn-retry').onclick     = () => startGame(mode);
+document.getElementById('btn-menu').onclick      = showMenu;
+
+function showMenu() {
+  overlay.classList.remove('show');
+  gameDiv.style.display = 'none';
+  menu.style.display = 'flex';
+  stopTimer();
+  gameActive = false;
+  blackTiles.clear();
+}
+
+function startGame(m) {
+  mode = m;
+  score = 0;
+  gameActive = true;
+  overlay.classList.remove('show');
+  menu.style.display = 'none';
+  gameDiv.style.display = 'flex';
+  gameDiv.style.flexDirection = 'column';
+  gameDiv.style.alignItems = 'center';
+  scoreDisplay.textContent = 'Score: 0';
+  stopTimer();
+  resize();
+
+  if (mode === 'classic') {
+    timerDisplay.style.display = 'inline';
+    startTime = Date.now();
+    timerInterval = setInterval(updateClassicTimer, 50);
+  } else if (mode === 'endurance') {
+    timerDisplay.style.display = 'inline';
+    timeLeft = ENDURANCE_TIME;
+    timerDisplay.textContent = 'Time: ' + ENDURANCE_TIME.toFixed(1);
+    startTime = Date.now();
+    timerInterval = setInterval(updateEnduranceTimer, 50);
+  } else {
+    timerDisplay.style.display = 'none';
+  }
+
+  blackTiles.clear();
+  for (let i = 0; i < GRID_SIZE; i++) {
+    tileAnim[i].press = 0;
+    tileAnim[i].flashUntil = 0;
+  }
+  placeBlackTiles(NUM_BLACK);
+}
+
+function placeBlackTiles(count, exclude = -1) {
+  const whites = [];
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!blackTiles.has(i) && i !== exclude) whites.push(i);
+  }
+  for (let j = 0; j < count && whites.length > 0; j++) {
+    const idx = Math.floor(Math.random() * whites.length);
+    blackTiles.add(whites[idx]);
+    whites.splice(idx, 1);
+  }
+}
+
+function flash(index, color) {
+  tileAnim[index].flashColor = color;
+  tileAnim[index].flashUntil = performance.now() + 120;
+}
+
+function handleTap(index) {
+  if (!gameActive) return;
+
+  if (blackTiles.has(index)) {
+    score++;
+    scoreDisplay.textContent = 'Score: ' + score;
+    blackTiles.delete(index);
+    tileAnim[index].press = 0.18;
+    flash(index, COLOR_GREEN);
+    placeBlackTiles(1, index);
+
+    if (mode === 'classic' && score >= CLASSIC_TARGET) {
+      gameOver(true);
+    }
+  } else {
+    flash(index, COLOR_RED);
+    tileAnim[index].press = 0.12;
+    gameOver(false);
+  }
+}
+
+function updateClassicTimer() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  timerDisplay.textContent = 'Time: ' + elapsed.toFixed(2);
+}
+
+function updateEnduranceTimer() {
+  const elapsed = (Date.now() - startTime) / 1000;
+  timeLeft = ENDURANCE_TIME - elapsed;
+  if (timeLeft <= 0) {
+    timeLeft = 0;
+    timerDisplay.textContent = 'Time: 0.0';
+    gameOver(true);
+    return;
+  }
+  timerDisplay.textContent = 'Time: ' + timeLeft.toFixed(1);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function gameOver(won) {
+  gameActive = false;
+  stopTimer();
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  if (mode === 'classic' && won) {
+    overTitle.textContent = 'Complete!';
+    overScore.textContent = CLASSIC_TARGET + ' tiles in ' + elapsed + 's';
+    overTime.textContent = '';
+    updateBest('classic-3d', parseFloat(elapsed), true);
+  } else if (mode === 'endurance' && won) {
+    overTitle.textContent = 'You Survived!';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'You lasted the full 60 seconds!';
+    updateBest('endurance-3d', score, false);
+  } else if (mode === 'endurance') {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'Survived: ' + elapsed + 's';
+    updateBest('endurance-3d', score, false);
+  } else if (mode === 'zen') {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = '';
+    updateBest('zen-3d', score, false);
+  } else {
+    overTitle.textContent = 'Game Over';
+    overScore.textContent = 'Score: ' + score;
+    overTime.textContent = 'Time: ' + elapsed + 's';
+    updateBest('classic-3d-fail', score, false);
+  }
+
+  overlay.classList.add('show');
+}
+
+function updateBest(key, value, lowerIsBetter) {
+  const stored = localStorage.getItem('best_' + key);
+  const best = stored ? parseFloat(stored) : null;
+  let isBest = false;
+  if (best === null) isBest = true;
+  else if (lowerIsBetter) isBest = value < best;
+  else isBest = value > best;
+
+  if (isBest) {
+    localStorage.setItem('best_' + key, value);
+    bestScoreEl.textContent = 'New Best! ' + (lowerIsBetter ? value + 's' : value);
+  } else {
+    bestScoreEl.textContent = 'Best: ' + (lowerIsBetter ? best + 's' : best);
+  }
+}
+</script>
+</body>
+</html>
