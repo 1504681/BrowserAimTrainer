@@ -94,6 +94,42 @@ async function handleGet(req, env) {
   return json({ scores: dedupeByName(arr) });
 }
 
+async function handleFeedback(req, env) {
+  let body;
+  try { body = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }
+  const { type, subject, message, name } = body || {};
+  if (!['bug', 'feature', 'other'].includes(type)) return json({ error: 'invalid type' }, 400);
+  if (typeof subject !== 'string' || !subject.trim()) return json({ error: 'subject required' }, 400);
+  if (typeof message !== 'string' || !message.trim()) return json({ error: 'message required' }, 400);
+  if (subject.length > 140) return json({ error: 'subject too long' }, 400);
+  if (message.length > 4000) return json({ error: 'message too long' }, 400);
+
+  const ip = req.headers.get('CF-Connecting-IP') || req.headers.get('x-forwarded-for') || 'unknown';
+
+  // Per-IP rate limit — 5 feedback submissions per hour
+  const rlKey = 'fb-rl:' + ip;
+  const rlRaw = await env.SCORES.get(rlKey);
+  const now = Date.now();
+  let rlArr = [];
+  if (rlRaw) { try { rlArr = JSON.parse(rlRaw); } catch {} }
+  rlArr = rlArr.filter(t => now - t < 3600_000);
+  if (rlArr.length >= 5) return json({ error: 'rate limited — max 5/hour' }, 429);
+  rlArr.push(now);
+  await env.SCORES.put(rlKey, JSON.stringify(rlArr), { expirationTtl: 3700 });
+
+  const entry = {
+    type,
+    subject: subject.trim().slice(0, 140),
+    message: message.trim().slice(0, 4000),
+    name: sanitizeName(name),
+    ts: now,
+    ua: (req.headers.get('User-Agent') || '').slice(0, 200),
+  };
+  const key = `fb:${now}:${Math.random().toString(36).slice(2, 8)}`;
+  await env.SCORES.put(key, JSON.stringify(entry));
+  return json({ ok: true });
+}
+
 async function handlePost(req, env) {
   let body;
   try { body = await req.json(); } catch { return json({ error: 'invalid json' }, 400); }
@@ -146,6 +182,7 @@ export default {
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/scores') return handleGet(req, env);
     if (req.method === 'POST' && url.pathname === '/submit') return handlePost(req, env);
+    if (req.method === 'POST' && url.pathname === '/feedback') return handleFeedback(req, env);
     if (req.method === 'GET' && url.pathname === '/health') return json({ ok: true });
     return json({ error: 'not found' }, 404);
   },

@@ -1287,6 +1287,66 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Feedback modal */
+  #feedback-modal { z-index: 28; }
+  .fb-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px 32px;
+    max-width: 520px;
+    width: 100%;
+    box-shadow: var(--shadow-lg);
+  }
+  .fb-card h1 { font-size: 1.5rem; margin-bottom: 6px; }
+  .fb-eyebrow {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .fb-intro {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .fb-field { display: block; margin-bottom: 12px; }
+  .fb-lbl {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .fb-field input, .fb-field textarea {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: var(--r-sm);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 500;
+  }
+  .fb-field textarea {
+    resize: vertical;
+    min-height: 110px;
+    line-height: 1.5;
+  }
+  .fb-field input:focus, .fb-field textarea:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .fb-status {
+    min-height: 1.2rem;
+    font-size: 0.78rem;
+    margin-top: 2px;
+  }
+  .fb-status.ok { color: var(--success); }
+  .fb-status.err { color: var(--danger); }
+
   /* Strafe tutorial popup */
   #strafe-tutorial { z-index: 28; }
   .tut-card {
@@ -2008,8 +2068,30 @@
 
   <div class="row" style="margin-top:18px;">
     <button class="btn muted" id="btn-settings">⚙ Settings</button>
-    <a class="btn muted" href="https://github.com/1504681/BrowserAimTrainer/issues/new?labels=bug&title=Bug%3A+&body=%23%23+What+happened%0A%0A%23%23+Expected%0A%0A%23%23+Steps+to+reproduce%0A" target="_blank" rel="noopener">🐛 Report Bug</a>
-    <a class="btn muted" href="https://github.com/1504681/BrowserAimTrainer/issues/new?labels=enhancement&title=Feature+Request%3A+&body=%23%23+What+would+you+like%0A%0A%23%23+Why+%2F+use+case%0A" target="_blank" rel="noopener">💡 Feature Request</a>
+    <button class="btn muted" id="btn-report-bug">🐛 Report Bug</button>
+    <button class="btn muted" id="btn-feature-request">💡 Feature Request</button>
+  </div>
+</div>
+
+<!-- Feedback modal -->
+<div id="feedback-modal" class="screen">
+  <div class="fb-card">
+    <div class="fb-eyebrow" id="fb-eyebrow">Feedback</div>
+    <h1 id="fb-title">Submit Feedback</h1>
+    <p class="fb-intro" id="fb-intro">Anything you want to share — no GitHub account required.</p>
+    <label class="fb-field">
+      <span class="fb-lbl">Subject</span>
+      <input id="fb-subject" type="text" maxlength="140" placeholder="Short summary...">
+    </label>
+    <label class="fb-field">
+      <span class="fb-lbl">Details</span>
+      <textarea id="fb-message" rows="6" maxlength="4000" placeholder="Describe what happened / what you'd like to see..."></textarea>
+    </label>
+    <p class="fb-status" id="fb-status"></p>
+    <div class="row" style="margin-top: 12px;">
+      <button class="btn primary" id="fb-submit">Send</button>
+      <button class="btn muted" id="fb-cancel">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -3806,6 +3888,7 @@ document.addEventListener('keydown', (e) => {
     else if (id === 'settings-panel') { closeSettings(); }
     else if (id === 'history-screen') { showOnly(overlayScreen); }
     else if (id === 'overlay') { showMainMenu(); }
+    else if (id === 'feedback-modal') { showMainMenu(); }
     // first-run and menu have no "back" — ignore
   }
 });
@@ -5548,13 +5631,6 @@ bindCustomSlider('sd-cust-dir', 'sd-cust-dir-v', 'dir');
 bindCustomSlider('sd-cust-hp', 'sd-cust-hp-v', 'hp');
 bindCustomSlider('sd-cust-dist', 'sd-cust-dist-v', 'distance');
 
-$('sd-cust-enable').addEventListener('change', () => {
-  if (sdMode) {
-    Settings.customScenarios[sdMode].enabled = $('sd-cust-enable').checked;
-    saveSettings();
-  }
-});
-
 $('sd-cust-reset').onclick = () => {
   if (!sdMode) return;
   Settings.customScenarios[sdMode] = { size: 1, speed: 1, dir: 1, hp: 1, distance: 1, enabled: false };
@@ -5604,6 +5680,72 @@ for (const b of difficultyButtons) {
 syncDifficultyButtons();
 
 $('btn-settings').onclick = openSettings;
+
+// Feedback modal
+const feedbackModal = $('feedback-modal');
+let feedbackType = 'bug';
+function openFeedback(type) {
+  feedbackType = type;
+  if (type === 'bug') {
+    $('fb-eyebrow').textContent = 'Bug Report';
+    $('fb-title').textContent = 'Report a Bug';
+    $('fb-intro').textContent = "What went wrong? Don't worry about formatting — just describe it.";
+  } else {
+    $('fb-eyebrow').textContent = 'Feature Request';
+    $('fb-title').textContent = 'Request a Feature';
+    $('fb-intro').textContent = 'What would you like to see added or changed?';
+  }
+  $('fb-subject').value = '';
+  $('fb-message').value = '';
+  $('fb-status').textContent = '';
+  $('fb-status').className = 'fb-status';
+  $('fb-submit').disabled = false;
+  showOnly(feedbackModal);
+  setTimeout(() => $('fb-subject').focus(), 50);
+}
+$('btn-report-bug').onclick = () => openFeedback('bug');
+$('btn-feature-request').onclick = () => openFeedback('feature');
+$('fb-cancel').onclick = () => showMainMenu();
+$('fb-submit').onclick = async () => {
+  const subject = $('fb-subject').value.trim();
+  const message = $('fb-message').value.trim();
+  const status = $('fb-status');
+  if (!subject) { status.textContent = 'Subject required.'; status.className = 'fb-status err'; return; }
+  if (!message) { status.textContent = 'Please describe it.'; status.className = 'fb-status err'; return; }
+  status.textContent = 'Sending…';
+  status.className = 'fb-status';
+  $('fb-submit').disabled = true;
+  if (!LEADERBOARD_URL) {
+    status.textContent = 'No backend configured.'; status.className = 'fb-status err';
+    $('fb-submit').disabled = false;
+    return;
+  }
+  try {
+    const resp = await fetch(`${LEADERBOARD_URL}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: feedbackType,
+        subject, message,
+        name: Settings.playerName || 'Anon',
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.ok) {
+      status.textContent = 'Thanks! Feedback received.';
+      status.className = 'fb-status ok';
+      setTimeout(() => showMainMenu(), 900);
+    } else {
+      status.textContent = 'Error: ' + (data.error || resp.status);
+      status.className = 'fb-status err';
+      $('fb-submit').disabled = false;
+    }
+  } catch (e) {
+    status.textContent = 'Network error. Try again.';
+    status.className = 'fb-status err';
+    $('fb-submit').disabled = false;
+  }
+};
 
 // Strafe tutorial dismiss — unpause + resume
 function dismissStrafeTutorial(forever) {
