@@ -1740,6 +1740,18 @@
     flex-direction: column;
     overflow: hidden;
   }
+  #sd-leaderboard .lb-group { display: flex; flex-direction: column; }
+  #sd-leaderboard .lb-group + .lb-group { border-top: 1px solid var(--border); }
+  #sd-leaderboard .lb-group.click .lb-header {
+    background: linear-gradient(180deg, rgba(239,68,68,0.12), transparent);
+  }
+  #sd-leaderboard .lb-group.click .lb-title { color: #fca5a5; }
+  #sd-leaderboard .lb-group.click .lb-sub   { color: #ef4444; }
+  #sd-leaderboard .lb-group.track .lb-header {
+    background: linear-gradient(180deg, rgba(6,182,212,0.12), transparent);
+  }
+  #sd-leaderboard .lb-group.track .lb-title { color: #67e8f9; }
+  #sd-leaderboard .lb-group.track .lb-sub   { color: #06b6d4; }
   @media (max-width: 1100px) {
     #sd-leaderboard { display: none; }
   }
@@ -2485,13 +2497,7 @@
     </div>
   </div>
 
-  <aside id="sd-leaderboard">
-    <div class="lb-header">
-      <div class="lb-title">Scenario</div>
-      <div class="lb-sub">—</div>
-    </div>
-    <div class="lb-rows"></div>
-  </aside>
+  <aside id="sd-leaderboard"></aside>
  </div>
 </div>
 
@@ -4384,7 +4390,7 @@ function hideChartTooltip() {
 // ============================================================================
 // Leaderboard panel — shown alongside game-over overlay
 // ============================================================================
-function refreshLeaderboard(modeKey, fullKey, lower, rootEl) {
+function refreshLeaderboard(modeKey, fullKey, lower, rootEl, limit = 12) {
   rootEl = rootEl || leaderboardEl;
   const info = SCENARIO_INFO[modeKey];
   rootEl.querySelector('.lb-title').textContent = info ? info.title : (modeKey || 'Scenario');
@@ -4434,7 +4440,7 @@ function refreshLeaderboard(modeKey, fullKey, lower, rootEl) {
     if ((r.name === myName || !remote) && r.ts > latestMyTs) latestMyTs = r.ts;
   }
 
-  arr.slice(0, 12).forEach((r, i) => {
+  arr.slice(0, limit).forEach((r, i) => {
     const row = document.createElement('div');
     row.className = 'lb-row';
     if (r.ts === latestMyTs && (r.name === myName || !remote)) row.classList.add('you');
@@ -5577,12 +5583,34 @@ const SCENARIO_INFO = {
 const sdScreen = $('scenario-detail');
 const sdLeaderboardEl = $('sd-leaderboard');
 let sdMode = null;
+let sdShowBoth = false; // set when user opened detail via card click (no weapon chosen)
 
 function renderSdLeaderboard(modeKey) {
   const isPoleOnly = (modeKey === 'pole');
-  const weapon = isPoleOnly ? 'tracking' : Settings.weapon;
-  const fullKey = `${modeKey}-${Settings.difficulty}-${weapon}`;
-  refreshLeaderboard(modeKey, fullKey, false, sdLeaderboardEl);
+  const showBoth = sdShowBoth && !isPoleOnly;
+  sdLeaderboardEl.innerHTML = '';
+
+  const weapons = showBoth
+    ? ['hitscan', 'tracking']
+    : [isPoleOnly ? 'tracking' : Settings.weapon];
+
+  for (const w of weapons) {
+    const group = document.createElement('div');
+    group.className = 'lb-group ' + (w === 'tracking' ? 'track' : 'click');
+    group.innerHTML =
+      '<div class="lb-header">' +
+        '<div class="lb-title"></div>' +
+        '<div class="lb-sub">—</div>' +
+      '</div>' +
+      '<div class="lb-rows"></div>';
+    sdLeaderboardEl.appendChild(group);
+    const fullKey = `${modeKey}-${Settings.difficulty}-${w}`;
+    refreshLeaderboard(modeKey, fullKey, false, group, showBoth ? 6 : 12);
+    if (showBoth) {
+      // Override title to clearly label which weapon this sub-board is for
+      group.querySelector('.lb-title').textContent = w === 'tracking' ? 'Tracking' : 'Click-Timing';
+    }
+  }
 }
 
 function renderScenarioBests(modeKey) {
@@ -5613,10 +5641,11 @@ function renderScenarioBests(modeKey) {
   }
 }
 
-async function openScenarioDetail(modeKey) {
+async function openScenarioDetail(modeKey, opts = {}) {
   const info = SCENARIO_INFO[modeKey];
   if (!info) return;
   sdMode = modeKey;
+  if (opts.showBoth !== undefined) sdShowBoth = opts.showBoth;
   $('sd-title').textContent = info.title;
   $('sd-desc').textContent = info.description;
 
@@ -5752,19 +5781,18 @@ for (const btn of document.querySelectorAll('.play-btn')) {
     e.stopPropagation(); // don't bubble to the card click handler
     const m = btn.dataset.mode;
     const w = btn.dataset.weapon;
-    // Open the scenario detail screen with this weapon preselected so the
-    // user sees the leaderboard for that (mode, weapon) before committing.
+    // Weapon chosen → detail screen shows just that weapon's leaderboard
     Settings.weapon = w;
     saveSettings();
-    openScenarioDetail(m);
+    openScenarioDetail(m, { showBoth: false });
   });
 }
 
-// Card click → open detail screen (excluding play buttons)
+// Card click → open detail screen with both weapon leaderboards stacked
 for (const card of document.querySelectorAll('.scenario-card[data-mode]')) {
   card.addEventListener('click', (e) => {
     if (e.target.closest('.scenario-buttons')) return;
-    openScenarioDetail(card.dataset.mode);
+    openScenarioDetail(card.dataset.mode, { showBoth: true });
   });
 }
 
