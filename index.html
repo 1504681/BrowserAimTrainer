@@ -1714,6 +1714,12 @@
   #chart-tooltip .tt-val.gold { color: var(--gold); }
 
   /* Scenario detail screen */
+  #scenario-detail .sd-row {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    max-width: 100%;
+  }
   #scenario-detail .container {
     max-width: 760px;
     width: 100%;
@@ -1722,6 +1728,20 @@
     border-radius: var(--r-lg);
     padding: 28px 32px;
     box-shadow: var(--shadow-lg);
+  }
+  #sd-leaderboard {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (max-width: 1100px) {
+    #sd-leaderboard { display: none; }
   }
   #scenario-detail h1 { text-align: left; margin-bottom: 6px; }
   .sd-description {
@@ -2404,6 +2424,7 @@
 
 <!-- Scenario detail screen -->
 <div id="scenario-detail" class="screen">
+ <div class="sd-row">
   <div class="container">
     <h1 id="sd-title">Scenario</h1>
     <p id="sd-desc" class="sd-description"></p>
@@ -2463,6 +2484,15 @@
       <button class="btn muted" id="sd-back">Back</button>
     </div>
   </div>
+
+  <aside id="sd-leaderboard">
+    <div class="lb-header">
+      <div class="lb-title">Scenario</div>
+      <div class="lb-sub">—</div>
+    </div>
+    <div class="lb-rows"></div>
+  </aside>
+ </div>
 </div>
 
 <!-- Run history drill-down -->
@@ -2534,10 +2564,10 @@
 
   <aside id="leaderboard">
     <div class="lb-header">
-      <div class="lb-title" id="lb-title">Scenario</div>
-      <div class="lb-sub" id="lb-sub">—</div>
+      <div class="lb-title">Scenario</div>
+      <div class="lb-sub">—</div>
     </div>
-    <div class="lb-rows" id="lb-rows"></div>
+    <div class="lb-rows"></div>
   </aside>
  </div>
 </div>
@@ -4354,15 +4384,16 @@ function hideChartTooltip() {
 // ============================================================================
 // Leaderboard panel — shown alongside game-over overlay
 // ============================================================================
-function refreshLeaderboard(modeKey, fullKey, lower) {
+function refreshLeaderboard(modeKey, fullKey, lower, rootEl) {
+  rootEl = rootEl || leaderboardEl;
   const info = SCENARIO_INFO[modeKey];
-  $('lb-title').textContent = info ? info.title : (modeKey || 'Scenario');
+  rootEl.querySelector('.lb-title').textContent = info ? info.title : (modeKey || 'Scenario');
   // Parse the fullKey for the sub line: <mode>-<diff>-<weapon>
   const parts = fullKey.split('-');
   const wpn = parts[parts.length - 1] === 'tracking' ? 'Track' : 'Click';
   const diff = parts[parts.length - 2];
   const niceDiff = diff.charAt(0).toUpperCase() + diff.slice(1);
-  $('lb-sub').textContent = `${niceDiff} · ${wpn}`;
+  rootEl.querySelector('.lb-sub').textContent = `${niceDiff} · ${wpn}`;
 
   // Prefer remote scores when available, else fall back to local run history
   const remote = remoteScores[fullKey];
@@ -4386,7 +4417,7 @@ function refreshLeaderboard(modeKey, fullKey, lower) {
     return true;
   });
 
-  const rowsEl = $('lb-rows');
+  const rowsEl = rootEl.querySelector('.lb-rows');
   rowsEl.innerHTML = '';
   if (arr.length === 0) {
     const empty = document.createElement('div');
@@ -5544,7 +5575,15 @@ const SCENARIO_INFO = {
 };
 
 const sdScreen = $('scenario-detail');
+const sdLeaderboardEl = $('sd-leaderboard');
 let sdMode = null;
+
+function renderSdLeaderboard(modeKey) {
+  const isPoleOnly = (modeKey === 'pole');
+  const weapon = isPoleOnly ? 'tracking' : Settings.weapon;
+  const fullKey = `${modeKey}-${Settings.difficulty}-${weapon}`;
+  refreshLeaderboard(modeKey, fullKey, false, sdLeaderboardEl);
+}
 
 function renderScenarioBests(modeKey) {
   const bestsEl = $('sd-bests');
@@ -5588,8 +5627,11 @@ async function openScenarioDetail(modeKey) {
     Promise.all(
       diffs.flatMap(d => weapons.map(w => fetchRemoteScores(`${modeKey}-${d}-${w}`)))
     ).then(() => {
-      // Re-render bests grid with fresh data if still on this scenario
-      if (sdMode === modeKey) renderScenarioBests(modeKey);
+      // Re-render bests grid + leaderboard with fresh data if still on this scenario
+      if (sdMode === modeKey) {
+        renderScenarioBests(modeKey);
+        renderSdLeaderboard(modeKey);
+      }
     });
   }
 
@@ -5615,6 +5657,7 @@ async function openScenarioDetail(modeKey) {
   $('sd-cust-dist-v').textContent = '×' + Number(cfg.distance || 1).toFixed(2);
 
   renderScenarioBests(modeKey);
+  renderSdLeaderboard(modeKey);
 
   // Sync detail-screen difficulty buttons
   for (const b of document.querySelectorAll('[data-sd-diff]')) {
