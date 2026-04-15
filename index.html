@@ -3933,6 +3933,7 @@ document.addEventListener('mousemove', (e) => {
 let mouseDown = false;
 let lastFireTime = 0;
 canvasEl.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
   if (!gameActive) return;
   if (gamePaused) { resumeGame(); return; }
   if (!pointerLocked) { requestLock(); return; }
@@ -3940,7 +3941,7 @@ canvasEl.addEventListener('mousedown', (e) => {
   shoot();
   lastFireTime = performance.now();
 });
-window.addEventListener('mouseup', () => { mouseDown = false; });
+window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
 
 // Keyboard
 document.addEventListener('keydown', (e) => {
