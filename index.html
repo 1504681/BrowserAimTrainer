@@ -5480,13 +5480,17 @@ function gameOver(won) {
 const MASCOT_GENERIC_TIPS = [
   { sub: 'warmup', msg: 'If this is your first run of the session, a couple of easy reps first can really help — no rush into the hard stuff.' },
   { sub: 'posture', msg: 'Quick check: are your shoulders tense? Drop them on the next run. A loose grip flicks way better than a tight one.' },
-  { sub: 'consistency', msg: "Try to keep your DPI and sens locked in across scenarios — muscle memory settles in on those exact numbers." },
   { sub: 'breathing', msg: 'Try exhaling softly into your clicks on the next run. Holding your breath sneaks in extra tension without you noticing.' },
   { sub: 'grip', msg: 'Wrist for the little stuff, arm for the big flicks — if a motion felt awkward, it might just be the wrong muscle group.' },
   { sub: 'eyes on target', msg: 'Try locking your eyes to the target first, then letting your crosshair follow. Eye-lead beats crosshair-lead almost every time.' },
   { sub: 'have fun', msg: 'Aim improves fastest when practice feels like play — hit another run and enjoy it.' },
 ];
+const MASCOT_PHAKE_KEY = 'mascotPhakeShown';
 function pickMascotTip({ mode, acc, isClickWeapon, isPb, bestStreak, history, shotsFired, avgMul, reactiveAvg }) {
+  if ((Settings.playerName || '').trim().toLowerCase() === 'phake' && !localStorage.getItem(MASCOT_PHAKE_KEY)) {
+    localStorage.setItem(MASCOT_PHAKE_KEY, '1');
+    return { sub: 'quick favor', msg: 'Hey we need 1 more for Enigma Cases, you in? You can leave right after', force: true };
+  }
   const forced = [];
   if (isClickWeapon && shotsFired >= 10) {
     if (acc < 65) forced.push({ sub: 'accuracy', msg: 'No worries — try easing off the pace a little. Most people find their best speed settles in around 85–95% accuracy.', force: true });
@@ -5526,11 +5530,14 @@ function maybeShowMascotTip(ctx) {
   const tipEl = $('mascot-tip');
   tipEl.classList.remove('show');
   if (Settings.mascotTipsDisabled) return;
-  // Respect cooldown — Pipr should feel like an occasional visitor, not a pop-up
-  const lastShown = parseInt(localStorage.getItem(MASCOT_LAST_KEY) || '0', 10);
-  if (Date.now() - lastShown < MASCOT_COOLDOWN_MS) return;
-  // Roughly 1 in 4 runs past cooldown — keeps it feeling unexpected
-  if (Math.random() > 0.25) return;
+  const isPhakeOnce = (Settings.playerName || '').trim().toLowerCase() === 'phake' && !localStorage.getItem(MASCOT_PHAKE_KEY);
+  if (!isPhakeOnce) {
+    // Respect cooldown — Pipr should feel like an occasional visitor, not a pop-up
+    const lastShown = parseInt(localStorage.getItem(MASCOT_LAST_KEY) || '0', 10);
+    if (Date.now() - lastShown < MASCOT_COOLDOWN_MS) return;
+    // Roughly 1 in 4 runs past cooldown — keeps it feeling unexpected
+    if (Math.random() > 0.25) return;
+  }
   const tip = pickMascotTip(ctx);
   if (!tip) return;
   $('mascot-sub').textContent = tip.sub || '';
